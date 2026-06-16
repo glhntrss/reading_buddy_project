@@ -4,9 +4,15 @@ import 'home_page.dart';
 import 'reading_page.dart';
 import 'levels_page.dart';
 import 'profile_page.dart';
+import '../widgets/app_logo_header.dart';
 
 class MainNavigationPage extends StatefulWidget {
-  const MainNavigationPage({super.key});
+  final Map<String, dynamic> student;
+
+  const MainNavigationPage({
+    super.key,
+    required this.student,
+  });
 
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
@@ -46,10 +52,16 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Okuma Arkadaşı"),
-        centerTitle: true,
-      ),
+     appBar: AppBar(
+  automaticallyImplyLeading: false,
+  centerTitle: true,
+  toolbarHeight: 82,
+  backgroundColor: const Color(0xFFFCF7FF),
+  elevation: 0,
+  title: const AppLogoHeader(
+    height: 200,
+  ),
+),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),

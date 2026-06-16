@@ -18,6 +18,85 @@ class ApiService {
     throw Exception("Öğrenciler alınamadı: ${response.body}");
   }
 
+  static Future<Map<String, dynamic>> loginUser({
+  required String role,
+  required String loginIdentifier,
+  required String password,
+}) async {
+  final response = await http.post(
+    Uri.parse("$baseUrl/auth/login"),
+    body: {
+      "role": role,
+      "login_identifier": loginIdentifier,
+      "password": password,
+    },
+  ).timeout(const Duration(seconds: 8));
+
+  final data = jsonDecode(response.body);
+
+  if (response.statusCode == 200 && data["error"] == null) {
+    return data;
+  }
+
+  throw Exception(data["error"] ?? "Giriş başarısız.");
+}
+
+static Future<Map<String, dynamic>> registerStudentUser({
+  required String fullName,
+  required String email,
+  required String identifier,
+  required int age,
+  required String grade,
+  required String password,
+}) async {
+  final response = await http.post(
+    Uri.parse("$baseUrl/auth/register/student"),
+    body: {
+      "full_name": fullName,
+      "email": email,
+      "identifier": identifier,
+      "age": age.toString(),
+      "grade": grade,
+      "password": password,
+    },
+  ).timeout(const Duration(seconds: 8));
+
+  final data = jsonDecode(response.body);
+
+  if (response.statusCode == 200 && data["error"] == null) {
+    return data;
+  }
+
+  throw Exception(data["error"] ?? "Öğrenci kaydı oluşturulamadı.");
+}
+
+static Future<Map<String, dynamic>> registerTeacherUser({
+  required String fullName,
+  required String email,
+  required String identifier,
+  required String branch,
+  required String password,
+}) async {
+  final response = await http.post(
+    Uri.parse("$baseUrl/auth/register/teacher"),
+    body: {
+      "full_name": fullName,
+      "email": email,
+      "identifier": identifier,
+      "branch": branch,
+      "password": password,
+    },
+  ).timeout(const Duration(seconds: 8));
+
+  final data = jsonDecode(response.body);
+
+  if (response.statusCode == 200 && data["error"] == null) {
+    return data;
+  }
+
+  throw Exception(data["error"] ?? "Öğretmen kaydı oluşturulamadı.");
+}
+
   static Future<List<dynamic>> getStudentTexts(int studentId) async {
     final response = await http
         .get(Uri.parse("$baseUrl/student-texts/$studentId"))
@@ -55,6 +134,19 @@ class ApiService {
     }
 
     throw Exception("Raporlar alınamadı: ${response.body}");
+  }
+
+  static Future<Map<String, dynamic>> getStudentReport(int studentId) async {
+    final response = await http
+        .get(Uri.parse("$baseUrl/student-report/$studentId"))
+        .timeout(const Duration(seconds: 8));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data["report"] ?? {};
+    }
+
+    throw Exception("Öğrenci raporu alınamadı: ${response.body}");
   }
 
   static Future<Map<String, dynamic>> analyzeAudio({

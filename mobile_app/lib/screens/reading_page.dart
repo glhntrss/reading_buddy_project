@@ -53,7 +53,7 @@ class _ReadingPageState extends State<ReadingPage> {
   final Color primaryColor = const Color(0xFF6C63FF);
   final Color softPurple = const Color(0xFFF1EFFF);
   final Color softGreen = const Color(0xFFE8F8EF);
-  final Color softRed = const Color(0xFFFFECEC);
+  final Color softLilac = const Color(0xFFF3EFFF);
   final Color softYellow = const Color(0xFFFFF8E1);
 
   @override
@@ -350,6 +350,8 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
           hasAnalysisResult = true;
         });
 
+        if (!mounted) return;
+
         final action = await Navigator.push<Map<String, dynamic>>(
           context,
           MaterialPageRoute(
@@ -526,7 +528,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isRecording ? softRed : softGreen,
+              color: isRecording ? softLilac : softGreen,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -534,7 +536,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                 Icon(
                   isRecording ? Icons.mic : Icons.mic_none,
                   size: 30,
-                  color: isRecording ? Colors.red : Colors.green,
+                  color: isRecording ? primaryColor : Colors.green,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

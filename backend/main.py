@@ -16,7 +16,11 @@ from database import (
     get_texts_by_unlocked_levels,
     refresh_all_student_progress,
     get_home_summary,
+    register_student_user,
+    register_teacher_user,
+    login_user,
 )
+from ml_report import build_student_report
 import os
 import shutil
 import string
@@ -238,6 +242,91 @@ def text_similarity(reference_text: str, transcript: str) -> float:
     return SequenceMatcher(None, reference, candidate).ratio()
 
 
+def words_are_close(reference_word: str, student_word: str) -> bool:
+    if reference_word == student_word:
+        return True
+
+    similarity = SequenceMatcher(None, reference_word, student_word).ratio()
+
+    # Short words are very sensitive to ASR consonant drift, e.g. bak -> pak.
+    if (
+        len(reference_word) == len(student_word)
+        and len(reference_word) <= 4
+        and len(reference_word) >= 3
+        and reference_word[1:] == student_word[1:]
+    ):
+        return True
+
+    # Whisper can insert a short sound into very short child-reading words.
+    if (
+        len(student_word) == len(reference_word) + 1
+        and reference_word
+        and student_word
+        and student_word[0] == reference_word[0]
+        and student_word[-1] == reference_word[-1]
+        and similarity >= 0.78
+    ):
+        return True
+
+    if len(reference_word) >= 4 and similarity >= 0.84:
+        return True
+
+    return False
+
+
+def repair_joined_student_words(reference_words, student_words):
+    repaired_words = []
+    reference_index = 0
+
+    for student_word in student_words:
+        matched_joined_word = False
+        max_span = min(4, len(reference_words) - reference_index)
+
+        for span in range(max_span, 1, -1):
+            reference_chunk = reference_words[reference_index:reference_index + span]
+            joined_reference = "".join(reference_chunk)
+            similarity = SequenceMatcher(None, joined_reference, student_word).ratio()
+
+            if student_word == joined_reference or similarity >= 0.90:
+                repaired_words.extend(reference_chunk)
+                reference_index += span
+                matched_joined_word = True
+                break
+
+        if matched_joined_word:
+            continue
+
+        if reference_index < len(reference_words):
+            max_backtrack = min(2, reference_index)
+
+            for backtrack in range(max_backtrack, 0, -1):
+                prefix = "".join(reference_words[reference_index - backtrack:reference_index])
+
+                if not student_word.startswith(prefix):
+                    continue
+
+                tail = student_word[len(prefix):]
+
+                if tail and words_are_close(reference_words[reference_index], tail):
+                    repaired_words.append(reference_words[reference_index])
+                    reference_index += 1
+                    matched_joined_word = True
+                    break
+
+        if matched_joined_word:
+            continue
+
+        repaired_words.append(student_word)
+
+        if (
+            reference_index < len(reference_words)
+            and words_are_close(reference_words[reference_index], student_word)
+        ):
+            reference_index += 1
+
+    return repaired_words
+
+
 def looks_like_whisper_hallucination(transcript: str) -> bool:
     text = clean_text(transcript)
     hallucination_markers = (
@@ -364,7 +453,7 @@ def align_words(reference_words, student_words):
     # Tabloyu dolduruyoruz
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            if reference_words[i - 1] == student_words[j - 1]:
+            if words_are_close(reference_words[i - 1], student_words[j - 1]):
                 cost = 0
             else:
                 cost = 1
@@ -382,7 +471,7 @@ def align_words(reference_words, student_words):
 
     while i > 0 or j > 0:
         # Doğru kelime
-        if i > 0 and j > 0 and reference_words[i - 1] == student_words[j - 1]:
+        if i > 0 and j > 0 and words_are_close(reference_words[i - 1], student_words[j - 1]):
             analysis.append({
                 "reference_word": reference_words[i - 1],
                 "student_word": student_words[j - 1],
@@ -431,7 +520,8 @@ def compare_texts(reference_text: str, student_text: str):
     """
 
     reference_words = clean_text(reference_text).split()
-    student_words = clean_text(student_text).split()
+    raw_student_words = clean_text(student_text).split()
+    student_words = repair_joined_student_words(reference_words, raw_student_words)
 
     analysis = align_words(reference_words, student_words)
 
@@ -469,6 +559,7 @@ def compare_texts(reference_text: str, student_text: str):
             ((substitution_count + deletion_count + insertion_count) / total_reference_words) * 100,
             2
         )
+        wer = min(100, wer)
     else:
         war = 0
         wer = 0
@@ -851,7 +942,10 @@ async def analyze_audio(
             insertion_count=comparison["insertion_count"],
             duration_seconds=audio_stats.get("duration_seconds", 0),
         )
-        
+
+        ml_report = build_student_report(student_id)
+        ml_summary = ml_report["summary"]
+        ml_recommendation = ml_report["recommendation"]
 
 
         return {
@@ -869,6 +963,15 @@ async def analyze_audio(
             "deletion_count": comparison["deletion_count"],
             "insertion_count": comparison["insertion_count"],
             "word_analysis": comparison["analysis"],
+            "ml_prediction": {
+                "model_type": ml_report["model"]["type"],
+                "trained": ml_report["model"]["trained"],
+                "risk": ml_summary["risk"],
+                "latest_pass_probability": ml_summary["latest_pass_probability"],
+                "progress_label": ml_summary["progress_label"],
+                "next_text_difficulty": ml_recommendation["next_text_difficulty"],
+                "focus_letters": ml_recommendation["focus_letters"],
+            },
             "audio_debug": audio_stats
         }
 
@@ -926,3 +1029,96 @@ def home_summary(student_id: int):
     return {
         "summary": get_home_summary(student_id)
     }
+
+
+@app.get("/student-report/{student_id}")
+def student_report(student_id: int):
+    return {
+        "report": build_student_report(student_id)
+    }
+
+@app.post("/auth/register/student")
+def register_student(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    identifier: str = Form(...),
+    age: int = Form(...),
+    grade: str = Form(...),
+    password: str = Form(...)
+):
+    try:
+        student = register_student_user(
+            full_name=full_name,
+            email=email,
+            identifier=identifier,
+            age=age,
+            grade=grade,
+            password=password
+        )
+
+        return {
+            "message": "Öğrenci kaydı oluşturuldu.",
+            "role": "student",
+            "student": student
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+
+@app.post("/auth/register/teacher")
+def register_teacher(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    identifier: str = Form(...),
+    branch: str = Form(...),
+    password: str = Form(...)
+):
+    try:
+        teacher = register_teacher_user(
+            full_name=full_name,
+            email=email,
+            identifier=identifier,
+            branch=branch,
+            password=password
+        )
+
+        return {
+            "message": "Öğretmen kaydı oluşturuldu.",
+            "role": "teacher",
+            "teacher": teacher
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+
+@app.post("/auth/login")
+def auth_login(
+    role: str = Form(...),
+    login_identifier: str = Form(...),
+    password: str = Form(...)
+):
+    try:
+        result = login_user(
+            role=role,
+            login_identifier=login_identifier,
+            password=password
+        )
+
+        return {
+            "message": "Giriş başarılı.",
+            "role": role,
+            "user": result["user"],
+            "student": result["student"],
+            "teacher": result["teacher"]
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e)
+        }

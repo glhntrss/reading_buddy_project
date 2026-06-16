@@ -40,6 +40,21 @@ class _SessionsPageState extends State<SessionsPage> {
     return List.generate(count, (_) => "⭐").join();
   }
 
+  double percentValue(dynamic value) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString()) ?? 0.0;
+    return parsed.clamp(0.0, 100.0).toDouble();
+  }
+
+  String formatPercent(dynamic value) {
+    final percent = percentValue(value);
+    if (percent == percent.roundToDouble()) {
+      return "%${percent.toStringAsFixed(0)}";
+    }
+    return "%${percent.toStringAsFixed(1)}";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,15 +99,15 @@ class _SessionsPageState extends State<SessionsPage> {
                                 children: [
                                   Expanded(
                                     child: StatCard(
-                                      title: "WAR",
-                                      value: "%${session["war"] ?? 0}",
+                                      title: "Başarı",
+                                      value: formatPercent(session["war"]),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: StatCard(
-                                      title: "WER",
-                                      value: "%${session["wer"] ?? 0}",
+                                      title: "Hata",
+                                      value: formatPercent(session["wer"]),
                                     ),
                                   ),
                                 ],

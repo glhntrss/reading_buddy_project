@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
-import 'sessions_page.dart';
+import 'student_report_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -101,7 +101,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const SessionsPage(),
+                    builder: (_) => StudentReportPage(
+                      studentId: student?["id"] ?? 1,
+                    ),
                   ),
                 );
               },

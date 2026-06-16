@@ -16,12 +16,25 @@ class AnalysisResultPage extends StatelessWidget {
   static const Color primaryColor = Color(0xFF6C63FF);
   static const Color softYellow = Color(0xFFFFF8E1);
   static const Color softGreen = Color(0xFFE8F8EF);
-  static const Color softRed = Color(0xFFFFECEC);
+  static const Color softLavender = Color(0xFFF3EFFF);
 
   int get stars => data["stars"] ?? 0;
   bool get passed => data["passed"] == 1 || data["passed"] == true;
-  double get war => (data["war"] ?? 0).toDouble();
-  double get wer => (data["wer"] ?? 0).toDouble();
+  double get war => percentageValue(data["war"]);
+  double get wer => percentageValue(data["wer"]);
+
+  double percentageValue(dynamic value) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString()) ?? 0.0;
+    return parsed.clamp(0.0, 100.0).toDouble();
+  }
+
+  Map<String, dynamic> get mlPrediction {
+    final prediction = data["ml_prediction"];
+    if (prediction is Map<String, dynamic>) return prediction;
+    return {};
+  }
 
   Map<String, dynamic> get levelProgress {
     final progress = data["level_progress"];
@@ -48,7 +61,7 @@ class AnalysisResultPage extends StatelessWidget {
         return Colors.grey.shade600;
       case "extra":
       case "wrong":
-        return Colors.red.shade700;
+        return primaryColor;
       default:
         return Colors.black87;
     }
@@ -85,7 +98,7 @@ class AnalysisResultPage extends StatelessWidget {
           style: TextStyle(
             color: statusColor(status),
             decoration: statusDecoration(status),
-            decorationColor: Colors.red.shade700,
+            decorationColor: primaryColor,
             decorationThickness: 2,
             fontWeight: status == "correct" ? FontWeight.w600 : FontWeight.bold,
           ),
@@ -136,9 +149,9 @@ class AnalysisResultPage extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: softRed,
+          color: softLavender,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.red.shade100),
+          border: Border.all(color: primaryColor.withValues(alpha: 0.18)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,6 +178,86 @@ class AnalysisResultPage extends StatelessWidget {
         ),
       );
     }).toList();
+  }
+
+  Color mlRiskColor(String _) {
+    return primaryColor;
+  }
+
+  Widget buildMlPredictionCard() {
+    if (mlPrediction.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final passProbability = mlPrediction["latest_pass_probability"] is num
+        ? (mlPrediction["latest_pass_probability"] as num).toDouble()
+        : 0.0;
+    final successPercent = (passProbability * 100).clamp(0.0, 100.0).toDouble();
+    final focusLetters = mlPrediction["focus_letters"];
+    final focusItems = focusLetters is List ? focusLetters : [];
+    final color = mlRiskColor("");
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Öğrencinin Başarı Yüzdesi",
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "%${successPercent.toStringAsFixed(0)}",
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ProgressMetric(
+            title: "Başarı Yüzdesi",
+            value: successPercent,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Sonraki okuma: ${mlPrediction["next_text_difficulty"] ?? "-"}",
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (focusItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: focusItems.take(5).map((item) {
+                final map = item is Map ? item : {};
+                return Chip(
+                  backgroundColor: Colors.white,
+                  label: Text("${map["letter"] ?? "-"}"),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   String progressText() {
@@ -330,6 +423,8 @@ class AnalysisResultPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            buildMlPredictionCard(),
+            if (mlPrediction.isNotEmpty) const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(

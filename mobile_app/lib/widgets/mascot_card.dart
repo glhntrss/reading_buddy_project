@@ -5,16 +5,12 @@ class MascotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 245,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: const Center(
-        child: Text(
-          "🐥",
-          style: TextStyle(fontSize: 110),
+    return SizedBox(
+      height: 260,
+      child: Center(
+        child: Image.asset(
+          "assets/images/civciv.png",
+          fit: BoxFit.contain,
         ),
       ),
     );

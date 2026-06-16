@@ -21,10 +21,13 @@ class StreakCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
+          const Align(
+            alignment: Alignment.topRight,
+            child: Icon(
             Icons.local_fire_department,
             color: Color(0xFFFF7A59),
             size: 26,
+          ),
           ),
           const SizedBox(height: 22),
           Text(

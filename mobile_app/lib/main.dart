@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/main_navigation_page.dart';
+import 'screens/auth_page.dart';
 
 void main() {
   runApp(const ReadingBuddyApp());
@@ -21,7 +21,7 @@ class ReadingBuddyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFFCF7FF),
       ),
-      home: const MainNavigationPage(),
+      home: const AuthPage(),
     );
   }
 }

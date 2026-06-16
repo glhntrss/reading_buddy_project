@@ -1,0 +1,51 @@
+level_id,title,level,content,target_letters,target_skill,word_count
+1,Seviye 1 - Açık Hece 1,Kolay,Ali ata bak.,a-l-t-b,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 2,Kolay,Ayşe top al.,a-y-ş-t-p,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 3,Kolay,Ece eve gel.,e-c-v-g,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 4,Kolay,Can su iç.,c-a-s-u-i-ç,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 5,Kolay,Ela ip at.,e-l-a-i-p-t,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 6,Kolay,Mert bal ye.,m-e-r-t-b-a-l,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 7,Kolay,Oya nar al.,o-y-a-n-r-l,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 8,Kolay,Lale mor gül.,l-a-m-o-r-g-ü,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 9,Kolay,Bora kapı aç.,b-o-r-a-k-p-ı-ç,Kısa kelime tanıma,3
+1,Seviye 1 - Açık Hece 10,Kolay,Duru kalem al.,d-u-r-k-l-m,Kısa kelime tanıma,3
+2,Seviye 2 - Günlük Cümle 1,Kolay,Bugün hava çok güzel.,b-g-h-v-ç-z,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 2,Kolay,Annem bana kitap aldı.,a-n-m-b-k-t-p,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 3,Kolay,Kedi minder üstünde uyudu.,k-d-m-n-r-ü,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 4,Kolay,Çocuk bahçede oyun oynadı.,ç-b-h-o-y-n,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 5,Kolay,Elif okul çantasını hazırladı.,e-l-f-o-k-ç,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 6,Kolay,Sınıfta yeni kalem buldum.,s-n-f-y-k-l,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 7,Kolay,Dedem bana masal anlattı.,d-m-b-s-l,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 8,Kolay,Akşam süt içip uyudum.,a-k-ş-m-s-t,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 9,Kolay,Parkta sarı top gördüm.,p-r-k-s-t-g,Günlük cümle okuma,4
+2,Seviye 2 - Günlük Cümle 10,Kolay,Kardeşim resim yapmayı seviyor.,k-r-d-ş-s-m,Günlük cümle okuma,4
+3,Seviye 3 - Benzer Sesler 1,Orta,Bora dereye doğru baktı.,b-d-r,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 2,Orta,Duru büyük defteri buldu.,d-b-r,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 3,Orta,Pelin parlak boncuğu buldu.,p-b-l,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 4,Orta,Seda sıcak çorbayı sevdi.,s-ç-c,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 5,Orta,Şule sınıfta sessizce çalıştı.,ş-s-ç,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 6,Orta,Cem çiçekleri cam kenarına koydu.,c-ç-k,Benzer sesleri ayırt etme,5
+3,Seviye 3 - Benzer Sesler 7,Orta,Mina ninemin mavi minderi aldı.,m-n,Benzer sesleri ayırt etme,5
+3,Seviye 3 - Benzer Sesler 8,Orta,Fırat fıstıklı kurabiyeyi dikkatle yedi.,f-t-d,Benzer sesleri ayırt etme,5
+3,Seviye 3 - Benzer Sesler 9,Orta,Gizem güzel gömleğini giydi.,g-z,Benzer sesleri ayırt etme,4
+3,Seviye 3 - Benzer Sesler 10,Orta,Hakan hızlıca halıyı havalandırdı.,h-l,Benzer sesleri ayırt etme,4
+4,Seviye 4 - Kısa Paragraf 1,Orta,Zeynep sabah parkta yürüdü. Sonra bankta kitap okudu.,z-p-y-r,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 2,Orta,Mert okuldan eve geldi. Çantasını masanın yanına koydu.,m-t-k-ç,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 3,Orta,Ayşe bahçede çiçek suladı. Kırmızı gülü dikkatle kokladı.,a-ş-ç-k,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 4,Orta,Can kardeşiyle oyun kurdu. Küçük arabayı sırayla sürdüler.,c-k-ş-r,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 5,Orta,Elif annesiyle pazara gitti. Taze elma ve armut aldı.,e-l-f-a,Kısa paragraf okuma,10
+4,Seviye 4 - Kısa Paragraf 6,Orta,Bora defterine güzel bir resim çizdi. Sonra resmi boyadı.,b-d-r-ç,Kısa paragraf okuma,9
+4,Seviye 4 - Kısa Paragraf 7,Orta,Duru yağmurdan sonra gökkuşağını gördü. Renkleri tek tek saydı.,d-r-g-y,Kısa paragraf okuma,9
+4,Seviye 4 - Kısa Paragraf 8,Orta,Pelin mutfakta annesine yardım etti. Masaya tabakları dizdi.,p-m-t-d,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 9,Orta,Seda yeni kitabını açtı. İlk sayfayı yavaşça okudu.,s-y-k-f,Kısa paragraf okuma,8
+4,Seviye 4 - Kısa Paragraf 10,Orta,Cem pencereden dışarı baktı. Bahçede oynayan çocukları gördü.,c-ç-b,Kısa paragraf okuma,8
+5,Seviye 5 - Akıcılık Metni 1,Zor,Küçük çocuk sarı yaprakları topladı. Yaprakları defterinin arasına özenle yerleştirdi.,k-ç-y-r,Akıcılık ve dikkat,11
+5,Seviye 5 - Akıcılık Metni 2,Zor,Zeynep kütüphanede sessizce oturdu. Sevdiği kitabın yeni bölümünü dikkatle okudu.,z-s-t-d,Akıcılık ve dikkat,11
+5,Seviye 5 - Akıcılık Metni 3,Zor,Mert sabah erkenden uyandı. Kahvaltıdan sonra okul çantasını düzenledi.,m-r-t-k,Akıcılık ve dikkat,10
+5,Seviye 5 - Akıcılık Metni 4,Zor,Ayşe sınıfta öğretmenini dinledi. Soruyu anlayınca parmağını kaldırıp cevap verdi.,a-ş-s-r,Akıcılık ve dikkat,10
+5,Seviye 5 - Akıcılık Metni 5,Zor,Bora ve Duru bahçede birlikte oynadı. Oyundan sonra ellerini yıkayıp eve girdiler.,b-d-r-y,Akıcılık ve dikkat,12
+5,Seviye 5 - Akıcılık Metni 6,Zor,Pelin renkli kalemlerini sıraya dizdi. Her kalemle farklı bir şekil çizdi.,p-r-k-ş,Akıcılık ve dikkat,11
+5,Seviye 5 - Akıcılık Metni 7,Zor,Seda yağmurlu havada pencereden dışarı baktı. Sokaktan geçen arabaları saydı.,s-y-p-r,Akıcılık ve dikkat,10
+5,Seviye 5 - Akıcılık Metni 8,Zor,Cem akşam yemeğinden sonra dişlerini fırçaladı. Yatağına uzanıp kısa bir masal dinledi.,c-ş-d-m,Akıcılık ve dikkat,13
+5,Seviye 5 - Akıcılık Metni 9,Zor,Elif okul bahçesinde arkadaşlarıyla yürüdü. Öğretmeni gelince sıraya geçti.,e-l-f-ğ,Akıcılık ve dikkat,10
+5,Seviye 5 - Akıcılık Metni 10,Zor,Hakan dikkatlice tahtadaki cümleyi okudu. Takıldığı kelimeyi yavaşça tekrar etti.,h-d-t-k,Akıcılık ve dikkat,10

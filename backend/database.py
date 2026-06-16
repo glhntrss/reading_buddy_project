@@ -1,7 +1,9 @@
+import os
 import sqlite3
 from datetime import datetime, timedelta
+import hashlib
 
-DB_NAME = "reading_buddy.db"
+DB_NAME = os.path.join(os.path.dirname(__file__), "reading_buddy.db")
 
 
 def get_connection():
@@ -9,6 +11,32 @@ def get_connection():
     connection.row_factory = sqlite3.Row
     return connection
 
+
+def clamp_percentage(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0
+
+    return max(0, min(100, round(number, 2)))
+
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = os.urandom(16).hex()
+
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        100000
+    ).hex()
+
+    return password_hash, salt
+
+
+def verify_password(password, password_hash, salt):
+    calculated_hash, _ = hash_password(password, salt)
+    return calculated_hash == password_hash
 
 def column_exists(cursor, table_name, column_name):
     cursor.execute(f"PRAGMA table_info({table_name})")
@@ -20,6 +48,214 @@ def add_column_if_not_exists(cursor, table_name, column_name, column_type):
     if not column_exists(cursor, table_name, column_name):
         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
+
+def register_student_user(full_name, email, identifier, age, grade, password):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * FROM users
+        WHERE email = ? OR identifier = ?
+    """, (email, identifier))
+
+    existing_user = cursor.fetchone()
+
+    if existing_user:
+        connection.close()
+        raise Exception("Bu mail veya ID ile kayıtlı kullanıcı zaten var.")
+
+    password_hash, password_salt = hash_password(password)
+
+    cursor.execute("""
+        INSERT INTO users (
+            role, full_name, email, identifier,
+            password_hash, password_salt, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "student",
+        full_name,
+        email,
+        identifier,
+        password_hash,
+        password_salt,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    user_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO students (
+            user_id, name, email, identifier,
+            age, grade, current_level, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        user_id,
+        full_name,
+        email,
+        identifier,
+        age,
+        grade,
+        1,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    student_id = cursor.lastrowid
+
+    cursor.execute("SELECT id FROM levels ORDER BY id ASC")
+    levels = cursor.fetchall()
+
+    for level in levels:
+        level_id = level["id"]
+        is_unlocked = 1 if level_id == 1 else 0
+
+        cursor.execute("""
+            INSERT INTO student_progress (
+                student_id, level_id, best_stars, is_unlocked, is_completed
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            student_id,
+            level_id,
+            0,
+            is_unlocked,
+            0
+        ))
+
+    connection.commit()
+
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    student = cursor.fetchone()
+
+    connection.close()
+
+    return dict(student)
+
+def register_teacher_user(full_name, email, identifier, branch, password):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * FROM users
+        WHERE email = ? OR identifier = ?
+    """, (email, identifier))
+
+    existing_user = cursor.fetchone()
+
+    if existing_user:
+        connection.close()
+        raise Exception("Bu mail veya ID ile kayıtlı kullanıcı zaten var.")
+
+    password_hash, password_salt = hash_password(password)
+
+    cursor.execute("""
+        INSERT INTO users (
+            role, full_name, email, identifier,
+            password_hash, password_salt, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "teacher",
+        full_name,
+        email,
+        identifier,
+        password_hash,
+        password_salt,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    user_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO teachers (
+            user_id, name, email, identifier, branch, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        user_id,
+        full_name,
+        email,
+        identifier,
+        branch,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+
+    teacher_id = cursor.lastrowid
+
+    connection.commit()
+
+    cursor.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,))
+    teacher = cursor.fetchone()
+
+    connection.close()
+
+    return dict(teacher)
+
+def login_user(role, login_identifier, password):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT * FROM users
+        WHERE role = ?
+          AND (email = ? OR identifier = ?)
+    """, (
+        role,
+        login_identifier,
+        login_identifier
+    ))
+
+    user = cursor.fetchone()
+
+    if not user:
+        connection.close()
+        raise Exception("Kullanıcı bulunamadı.")
+
+    is_valid = verify_password(
+        password,
+        user["password_hash"],
+        user["password_salt"]
+    )
+
+    if not is_valid:
+        connection.close()
+        raise Exception("Şifre hatalı.")
+
+    user_dict = dict(user)
+
+    if role == "student":
+        cursor.execute("""
+            SELECT * FROM students
+            WHERE user_id = ?
+        """, (user["id"],))
+
+        student = cursor.fetchone()
+        connection.close()
+
+        return {
+            "user": user_dict,
+            "student": dict(student) if student else None,
+            "teacher": None
+        }
+
+    if role == "teacher":
+        cursor.execute("""
+            SELECT * FROM teachers
+            WHERE user_id = ?
+        """, (user["id"],))
+
+        teacher = cursor.fetchone()
+        connection.close()
+
+        return {
+            "user": user_dict,
+            "student": None,
+            "teacher": dict(teacher) if teacher else None
+        }
+
+    connection.close()
+    raise Exception("Geçersiz kullanıcı rolü.")
 
 def create_tables():
     connection = get_connection()
@@ -46,12 +282,40 @@ def create_tables():
     """)
 
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT,
+        full_name TEXT,
+        email TEXT UNIQUE,
+        identifier TEXT UNIQUE,
+        password_hash TEXT,
+        password_salt TEXT,
+        created_at TEXT
+    )
+""")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS teachers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        name TEXT,
+        email TEXT,
+        identifier TEXT,
+        branch TEXT,
+        created_at TEXT
+    )
+""")
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS reading_texts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             level_id INTEGER,
             title TEXT,
             level TEXT,
-            content TEXT
+            content TEXT,
+            target_letters TEXT,
+            target_skill TEXT,
+            word_count INTEGER
         )
     """)
 
@@ -93,6 +357,12 @@ def create_tables():
     add_column_if_not_exists(cursor, "reading_sessions", "stars", "INTEGER")
     add_column_if_not_exists(cursor, "reading_sessions", "passed", "INTEGER")
     add_column_if_not_exists(cursor, "reading_sessions", "duration_seconds", "REAL DEFAULT 0")
+    add_column_if_not_exists(cursor, "reading_texts", "target_letters", "TEXT")
+    add_column_if_not_exists(cursor, "reading_texts", "target_skill", "TEXT")
+    add_column_if_not_exists(cursor, "reading_texts", "word_count", "INTEGER")
+    add_column_if_not_exists(cursor, "students", "user_id", "INTEGER")
+    add_column_if_not_exists(cursor, "students", "email", "TEXT")
+    add_column_if_not_exists(cursor, "students", "identifier", "TEXT")
 
     connection.commit()
     connection.close()
@@ -393,9 +663,9 @@ def refresh_all_student_progress():
 def calculate_stars(war, wer):
     if war >= 90 and wer <= 10:
         return 3
-    elif war >= 75 and wer <= 25:
+    elif war >= 66 and wer <= 50:
         return 2
-    elif war >= 60 and wer <= 40:
+    elif war >= 33 and wer <= 75:
         return 1
     else:
         return 0
@@ -416,6 +686,8 @@ def save_reading_session(
     duration_seconds=0
 
 ):
+    war = clamp_percentage(war)
+    wer = clamp_percentage(wer)
     stars = calculate_stars(war, wer)
     passed = 1 if stars >= 2 else 0
 
@@ -539,10 +811,15 @@ def get_all_sessions():
         ORDER BY created_at DESC
     """)
 
-    rows = cursor.fetchall()
+    rows = []
+    for row in cursor.fetchall():
+        item = dict(row)
+        item["war"] = clamp_percentage(item.get("war"))
+        item["wer"] = clamp_percentage(item.get("wer"))
+        rows.append(item)
     connection.close()
 
-    return [dict(row) for row in rows]
+    return rows
 
 
 def get_student_progress(student_id):
