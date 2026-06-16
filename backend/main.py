@@ -1,23 +1,151 @@
 from faster_whisper import WhisperModel
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from database import create_tables, save_reading_session, get_all_sessions
-
+from difflib import SequenceMatcher
+from database import (
+    create_tables,
+    seed_levels,
+    seed_reading_texts,
+    seed_default_student,
+    save_reading_session,
+    get_all_sessions,
+    get_reading_texts,
+    get_students,
+    get_levels,
+    get_student_progress,
+    get_texts_by_unlocked_levels,
+    refresh_all_student_progress
+)
 import os
 import shutil
 import string
+import wave
+import math
+import sys
+import unicodedata
+import tempfile
+from array import array
 
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception as e:
+    print("dotenv yuklenemedi:", e)
+
+
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", os.getenv("WHISPER_MODEL", "base"))
+WHISPER_DOWNLOAD_ROOT = os.getenv("WHISPER_DOWNLOAD_ROOT", "C:/HFCache")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "tr")
+WHISPER_VAD_FILTER = os.getenv("WHISPER_VAD_FILTER", "false").lower() in ("1", "true", "yes", "on")
+WHISPER_NO_SPEECH_THRESHOLD = float(os.getenv("WHISPER_NO_SPEECH_THRESHOLD", "0.6"))
+WHISPER_SENSITIVE_NO_SPEECH_THRESHOLD = float(os.getenv("WHISPER_SENSITIVE_NO_SPEECH_THRESHOLD", "0.95"))
+WHISPER_MAX_NO_SPEECH_PROB = float(os.getenv("WHISPER_MAX_NO_SPEECH_PROB", "0.6"))
+WHISPER_SENSITIVE_MAX_NO_SPEECH_PROB = float(os.getenv("WHISPER_SENSITIVE_MAX_NO_SPEECH_PROB", "0.85"))
+WHISPER_INITIAL_PROMPT = os.getenv(
+    "WHISPER_INITIAL_PROMPT",
+    "Kisa Turkce cocuk okuma metni. Turkce karakterleri dogru yaz: c, g, i, o, s, u.",
+)
+TARGET_AUDIO_RMS = float(os.getenv("TARGET_AUDIO_RMS", "1200"))
+MAX_AUDIO_GAIN = float(os.getenv("MAX_AUDIO_GAIN", "8"))
+
+ACTIVE_WHISPER_DEVICE = "unknown"
+ACTIVE_WHISPER_COMPUTE_TYPE = "unknown"
 
 app = FastAPI()
 
 create_tables()
+seed_levels()
+seed_reading_texts()
+seed_default_student()
+refresh_all_student_progress()
 
-model = WhisperModel(
-    "tiny",
-    device="cpu",
-    compute_type="int8",
-    download_root="C:/HFCache"
-)
+
+def cuda_is_available():
+    try:
+        import ctranslate2
+
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception as e:
+        print("CUDA kontrolu yapilamadi, CPU kullanilacak:", e)
+        return False
+
+
+def create_whisper_model():
+    global ACTIVE_WHISPER_DEVICE, ACTIVE_WHISPER_COMPUTE_TYPE
+
+    requested_device = os.getenv("WHISPER_DEVICE", "cpu").lower()
+    requested_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "auto").lower()
+
+    if requested_device == "auto":
+        device = "cuda" if cuda_is_available() else "cpu"
+    else:
+        device = requested_device
+
+    if requested_compute_type == "auto":
+        compute_type = "float16" if device == "cuda" else "int8"
+    else:
+        compute_type = requested_compute_type
+
+    try:
+        print(
+            "Whisper modeli yukleniyor:",
+            WHISPER_MODEL_SIZE,
+            "device=",
+            device,
+            "compute_type=",
+            compute_type,
+        )
+        model_instance = WhisperModel(
+            WHISPER_MODEL_SIZE,
+            device=device,
+            compute_type=compute_type,
+            download_root=WHISPER_DOWNLOAD_ROOT,
+        )
+        ACTIVE_WHISPER_DEVICE = device
+        ACTIVE_WHISPER_COMPUTE_TYPE = compute_type
+        return model_instance
+    except Exception as e:
+        if requested_device == "auto" and device == "cuda":
+            print("CUDA ile model yuklenemedi, CPU/int8 deneniyor:", e)
+            model_instance = WhisperModel(
+                WHISPER_MODEL_SIZE,
+                device="cpu",
+                compute_type="int8",
+                download_root=WHISPER_DOWNLOAD_ROOT,
+            )
+            ACTIVE_WHISPER_DEVICE = "cpu"
+            ACTIVE_WHISPER_COMPUTE_TYPE = "int8"
+            return model_instance
+
+        raise
+
+
+model = create_whisper_model()
+
+
+def should_retry_whisper_on_cpu(error):
+    if ACTIVE_WHISPER_DEVICE != "cuda":
+        return False
+
+    message = str(error).lower()
+    cuda_error_markers = ("cuda", "cublas", "cudnn")
+    return any(marker in message for marker in cuda_error_markers)
+
+
+def switch_whisper_to_cpu(reason):
+    global model, ACTIVE_WHISPER_DEVICE, ACTIVE_WHISPER_COMPUTE_TYPE
+
+    print("CUDA transcribe hatasi, CPU/int8 modele geciliyor:", reason)
+    model = WhisperModel(
+        WHISPER_MODEL_SIZE,
+        device="cpu",
+        compute_type="int8",
+        download_root=WHISPER_DOWNLOAD_ROOT,
+    )
+    ACTIVE_WHISPER_DEVICE = "cpu"
+    ACTIVE_WHISPER_COMPUTE_TYPE = "int8"
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,19 +164,33 @@ def home():
     return {"message": "Reading Buddy backend çalışıyor"}
 
 
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "whisper_model": WHISPER_MODEL_SIZE,
+        "whisper_device": ACTIVE_WHISPER_DEVICE,
+        "whisper_compute_type": ACTIVE_WHISPER_COMPUTE_TYPE,
+        "whisper_vad_filter": WHISPER_VAD_FILTER,
+        "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
+        "whisper_sensitive_no_speech_threshold": WHISPER_SENSITIVE_NO_SPEECH_THRESHOLD,
+        "whisper_max_no_speech_prob": WHISPER_MAX_NO_SPEECH_PROB,
+        "whisper_sensitive_max_no_speech_prob": WHISPER_SENSITIVE_MAX_NO_SPEECH_PROB,
+        "whisper_language": WHISPER_LANGUAGE,
+    }
+
+
 @app.post("/upload-audio")
 async def upload_audio(
     audio: UploadFile = File(...),
     reference_text: str = Form(...)
 ):
-    file_path = os.path.join(UPLOAD_DIR, audio.filename)
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(audio.file, buffer)
+    audio_bytes = await audio.read()
 
     return {
         "message": "Ses dosyası başarıyla alındı",
         "filename": audio.filename,
+        "size": len(audio_bytes),
         "reference_text": reference_text
     }
 
@@ -59,9 +201,143 @@ def clean_text(text: str) -> str:
     Büyük/küçük harf farkını kaldırır.
     Noktalama işaretlerini temizler.
     """
+    text = normalize_turkish_text(text)
     text = text.lower()
+    text = unicodedata.normalize("NFKD", text).replace("\u0307", "")
+    text = unicodedata.normalize("NFC", text)
     text = text.translate(str.maketrans("", "", string.punctuation))
     return text.strip()
+
+
+def normalize_turkish_text(text: str) -> str:
+    replacements = {
+        "ţ": "ş",
+        "Ţ": "Ş",
+        "þ": "ş",
+        "Þ": "Ş",
+        "ð": "ğ",
+        "Ð": "Ğ",
+        "ý": "ı",
+        "Ý": "İ",
+    }
+
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    return unicodedata.normalize("NFKC", text).strip()
+
+
+def text_similarity(reference_text: str, transcript: str) -> float:
+    reference = clean_text(reference_text)
+    candidate = clean_text(transcript)
+
+    if not reference or not candidate:
+        return 0
+
+    return SequenceMatcher(None, reference, candidate).ratio()
+
+
+def looks_like_whisper_hallucination(transcript: str) -> bool:
+    text = clean_text(transcript)
+    hallucination_markers = (
+        "sesli betimleme",
+        "trt tarafından",
+        "trt tarafindan",
+        "altyazı",
+        "altyazi",
+        "izlediğiniz için teşekkürler",
+        "izlediginiz icin tesekkurler",
+    )
+
+    return any(marker in text for marker in hallucination_markers)
+
+
+def analyze_letters(reference_word: str, student_word: str):
+    reference_letters = list(normalize_turkish_text(reference_word).lower())
+    student_letters = list(normalize_turkish_text(student_word).lower())
+    n = len(reference_letters)
+    m = len(student_letters)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+
+    for i in range(1, n + 1):
+        dp[i][0] = i
+
+    for j in range(1, m + 1):
+        dp[0][j] = j
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost = 0 if reference_letters[i - 1] == student_letters[j - 1] else 1
+            dp[i][j] = min(
+                dp[i - 1][j] + 1,
+                dp[i][j - 1] + 1,
+                dp[i - 1][j - 1] + cost,
+            )
+
+    i = n
+    j = m
+    analysis = []
+
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and reference_letters[i - 1] == student_letters[j - 1]:
+            analysis.append({
+                "reference_letter": reference_letters[i - 1],
+                "student_letter": student_letters[j - 1],
+                "status": "correct",
+            })
+            i -= 1
+            j -= 1
+        elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+            analysis.append({
+                "reference_letter": reference_letters[i - 1],
+                "student_letter": student_letters[j - 1],
+                "status": "wrong",
+            })
+            i -= 1
+            j -= 1
+        elif i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            analysis.append({
+                "reference_letter": reference_letters[i - 1],
+                "student_letter": "",
+                "status": "missing",
+            })
+            i -= 1
+        else:
+            analysis.append({
+                "reference_letter": "",
+                "student_letter": student_letters[j - 1],
+                "status": "extra",
+            })
+            j -= 1
+
+    analysis.reverse()
+    return analysis
+
+
+def build_word_feedback(item):
+    status = item["status"]
+
+    if status == "correct":
+        return "Bu kelime doğru okundu."
+
+    if status == "missing":
+        return f"'{item['reference_word']}' kelimesi atlanmış olabilir. Bu kelimeyi tane tane tekrar okuyalım."
+
+    if status == "extra":
+        return f"'{item['student_word']}' kelimesi metinde yok. Okurken sadece ekrandaki kelimelere odaklanalım."
+
+    focus_letters = []
+    for letter_item in item.get("letter_analysis", []):
+        if letter_item["status"] in ("wrong", "missing"):
+            letter = letter_item["reference_letter"]
+            if letter and letter not in focus_letters:
+                focus_letters.append(letter)
+
+    if focus_letters:
+        letters = ", ".join(focus_letters[:3])
+        return f"Bu kelimede {letters} sesine dikkat edelim. Kelimeyi yavaşça heceleyerek tekrar oku."
+
+    return "Bu kelime biraz farklı algılandı. Kelimeyi daha yavaş ve net okumayı deneyelim."
 
 
 def align_words(reference_words, student_words):
@@ -158,6 +434,17 @@ def compare_texts(reference_text: str, student_text: str):
 
     analysis = align_words(reference_words, student_words)
 
+    for item in analysis:
+        if item["status"] == "wrong":
+            item["letter_analysis"] = analyze_letters(
+                item["reference_word"],
+                item["student_word"],
+            )
+        else:
+            item["letter_analysis"] = []
+
+        item["feedback"] = build_word_feedback(item)
+
     correct_count = 0
     substitution_count = 0
     deletion_count = 0
@@ -195,6 +482,284 @@ def compare_texts(reference_text: str, student_text: str):
         "analysis": analysis
     }
 
+def calculate_audio_rms(file_path):
+    try:
+        with wave.open(file_path, "rb") as wav_file:
+            frames = wav_file.readframes(wav_file.getnframes())
+
+            if wav_file.getsampwidth() != 2:
+                return -1
+
+            samples = array("h")
+            samples.frombytes(frames)
+
+            if sys.byteorder == "big":
+                samples.byteswap()
+
+            if len(samples) == 0:
+                return 0
+
+            rms = math.sqrt(sum(sample * sample for sample in samples) / len(samples))
+            return round(rms, 2)
+
+    except Exception as e:
+        print("Ses seviyesi ölçülemedi:", e)
+        return -1
+
+def calculate_audio_stats(file_path):
+    stats = {
+        "sample_rate": None,
+        "channels": None,
+        "sample_width": None,
+        "duration_seconds": 0,
+        "rms": -1,
+        "peak": -1,
+        "gain_applied": 1,
+        "normalized": False,
+    }
+
+    try:
+        with wave.open(file_path, "rb") as wav_file:
+            stats["sample_rate"] = wav_file.getframerate()
+            stats["channels"] = wav_file.getnchannels()
+            stats["sample_width"] = wav_file.getsampwidth()
+            frame_count = wav_file.getnframes()
+            if stats["sample_rate"]:
+                stats["duration_seconds"] = round(frame_count / stats["sample_rate"], 2)
+
+            frames = wav_file.readframes(frame_count)
+
+            if wav_file.getsampwidth() != 2:
+                return stats
+
+            samples = array("h")
+            samples.frombytes(frames)
+
+            if sys.byteorder == "big":
+                samples.byteswap()
+
+            if not samples:
+                stats["rms"] = 0
+                stats["peak"] = 0
+                return stats
+
+            rms = math.sqrt(sum(sample * sample for sample in samples) / len(samples))
+            stats["rms"] = round(rms, 2)
+            stats["peak"] = max(abs(sample) for sample in samples)
+            return stats
+
+    except Exception as e:
+        print("Ses seviyesi olculemedi:", e)
+        return stats
+
+
+def normalize_audio_if_quiet(file_path, audio_stats):
+    rms = audio_stats.get("rms", -1)
+
+    if audio_stats.get("sample_width") != 2 or rms <= 0 or rms >= TARGET_AUDIO_RMS:
+        return file_path, audio_stats
+
+    try:
+        with wave.open(file_path, "rb") as source:
+            params = source.getparams()
+            frames = source.readframes(source.getnframes())
+
+        samples = array("h")
+        samples.frombytes(frames)
+
+        if sys.byteorder == "big":
+            samples.byteswap()
+
+        gain = min(TARGET_AUDIO_RMS / rms, MAX_AUDIO_GAIN)
+        boosted_samples = array(
+            "h",
+            (
+                max(-32768, min(32767, int(sample * gain)))
+                for sample in samples
+            ),
+        )
+
+        if sys.byteorder == "big":
+            boosted_samples.byteswap()
+
+        normalized_path = os.path.splitext(file_path)[0] + "_normalized.wav"
+        with wave.open(normalized_path, "wb") as target:
+            target.setparams(params)
+            target.writeframes(boosted_samples.tobytes())
+
+        normalized_stats = calculate_audio_stats(normalized_path)
+        normalized_stats["gain_applied"] = round(gain, 2)
+        normalized_stats["normalized"] = True
+        print("Dusuk ses normalize edildi:", normalized_stats)
+
+        return normalized_path, normalized_stats
+
+    except Exception as e:
+        print("Ses normalize edilemedi:", e)
+        return file_path, audio_stats
+
+
+def run_whisper_transcribe(file_path, vad_filter, options):
+    no_speech_threshold = options.get("no_speech_threshold", WHISPER_NO_SPEECH_THRESHOLD)
+    log_prob_threshold = options.get("log_prob_threshold")
+    compression_ratio_threshold = options.get("compression_ratio_threshold")
+
+    transcribe_kwargs = {
+        "language": WHISPER_LANGUAGE,
+        "beam_size": 5,
+        "vad_filter": vad_filter,
+        "no_speech_threshold": no_speech_threshold,
+        "condition_on_previous_text": False,
+        "initial_prompt": WHISPER_INITIAL_PROMPT,
+    }
+
+    if log_prob_threshold is not None:
+        transcribe_kwargs["log_prob_threshold"] = log_prob_threshold
+
+    if compression_ratio_threshold is not None:
+        transcribe_kwargs["compression_ratio_threshold"] = compression_ratio_threshold
+
+    segments, info = model.transcribe(
+        file_path,
+        **transcribe_kwargs,
+    )
+    segments = list(segments)
+    return segments, info
+
+
+def transcript_from_segments(segments, max_no_speech_prob):
+    accepted_segments = []
+    rejected_segments = []
+
+    for segment in segments:
+        no_speech_prob = getattr(segment, "no_speech_prob", None)
+        if no_speech_prob is not None and no_speech_prob > max_no_speech_prob:
+            rejected_segments.append({
+                "text": segment.text.strip(),
+                "no_speech_prob": round(no_speech_prob, 3),
+                "avg_logprob": round(getattr(segment, "avg_logprob", 0), 3),
+            })
+            continue
+
+        accepted_segments.append(normalize_turkish_text(segment.text.strip()))
+
+    if rejected_segments:
+        print("No-speech segmentleri elendi:", rejected_segments)
+
+    transcript = " ".join(accepted_segments).strip()
+    return transcript
+
+
+def segment_average(segments, field_name, default=0):
+    values = [
+        getattr(segment, field_name)
+        for segment in segments
+        if getattr(segment, field_name, None) is not None
+    ]
+
+    if not values:
+        return default
+
+    return sum(values) / len(values)
+
+
+def build_transcript_candidate(file_path, vad_filter, reference_text, options):
+    try:
+        segments, info = run_whisper_transcribe(file_path, vad_filter, options)
+    except RuntimeError as e:
+        if not should_retry_whisper_on_cpu(e):
+            raise
+
+        switch_whisper_to_cpu(e)
+        segments, info = run_whisper_transcribe(file_path, vad_filter, options)
+
+    transcript = transcript_from_segments(
+        segments,
+        options.get("max_no_speech_prob", WHISPER_MAX_NO_SPEECH_PROB),
+    )
+    similarity = text_similarity(reference_text, transcript)
+    avg_no_speech_prob = segment_average(segments, "no_speech_prob", 1)
+    avg_logprob = segment_average(segments, "avg_logprob", -2)
+    hallucination = looks_like_whisper_hallucination(transcript)
+
+    score = (
+        (similarity * 3)
+        + max(avg_logprob, -2)
+        - (avg_no_speech_prob * 0.75)
+        - (3 if hallucination else 0)
+    )
+
+    candidate = {
+        "label": options["label"],
+        "transcript": transcript,
+        "info": info,
+        "score": score,
+        "similarity": similarity,
+        "avg_no_speech_prob": avg_no_speech_prob,
+        "avg_logprob": avg_logprob,
+        "hallucination": hallucination,
+        "segment_count": len(segments),
+    }
+
+    print("Whisper adayi:", {
+        "label": candidate["label"],
+        "transcript": candidate["transcript"],
+        "score": round(candidate["score"], 3),
+        "similarity": round(candidate["similarity"], 3),
+        "avg_no_speech_prob": round(candidate["avg_no_speech_prob"], 3),
+        "avg_logprob": round(candidate["avg_logprob"], 3),
+        "hallucination": candidate["hallucination"],
+        "segment_count": candidate["segment_count"],
+    })
+
+    return candidate
+
+
+def candidate_is_usable(candidate):
+    if not candidate["transcript"]:
+        return False
+
+    if candidate["hallucination"]:
+        return False
+
+    if candidate["avg_no_speech_prob"] > 0.7 and candidate["similarity"] < 0.25:
+        return False
+
+    return True
+
+
+def transcribe_audio_file(file_path, vad_filter, reference_text=""):
+    options_list = [
+        {
+            "label": "normal",
+            "no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
+            "max_no_speech_prob": WHISPER_MAX_NO_SPEECH_PROB,
+        },
+        {
+            "label": "sensitive",
+            "no_speech_threshold": WHISPER_SENSITIVE_NO_SPEECH_THRESHOLD,
+            "max_no_speech_prob": WHISPER_SENSITIVE_MAX_NO_SPEECH_PROB,
+            "log_prob_threshold": -2.0,
+            "compression_ratio_threshold": 10.0,
+        },
+    ]
+
+    candidates = [
+        build_transcript_candidate(file_path, vad_filter, reference_text, options)
+        for options in options_list
+    ]
+
+    usable_candidates = [
+        candidate for candidate in candidates if candidate_is_usable(candidate)
+    ]
+
+    if not usable_candidates:
+        return "", candidates[-1]["info"]
+
+    best_candidate = max(usable_candidates, key=lambda candidate: candidate["score"])
+    return best_candidate["transcript"], best_candidate["info"]
+
+
 @app.post("/compare-text")
 async def compare_text(
     reference_text: str = Form(...),
@@ -216,7 +781,9 @@ async def compare_text(
 @app.post("/analyze-audio")
 async def analyze_audio(
     audio: UploadFile = File(...),
-    reference_text: str = Form(...)
+    reference_text: str = Form(...),
+    student_id: int = Form(1),
+    text_id: int = Form(None)
 ):
     """
     Flutter'dan gelen ses dosyasını alır.
@@ -225,23 +792,53 @@ async def analyze_audio(
     WAR / WER ve kelime analizini döndürür.
     """
 
-    file_path = os.path.join(UPLOAD_DIR, audio.filename)
+    suffix = os.path.splitext(audio.filename or "reading_audio.wav")[1] or ".wav"
+    cleanup_paths = []
+    audio_stats = {}
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(audio.file, buffer)
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=suffix,
+        prefix="reading_audio_",
+    ) as temp_file:
+        shutil.copyfileobj(audio.file, temp_file)
+        file_path = temp_file.name
 
+    cleanup_paths.append(file_path)
+
+    print("Gelen ses dosyası:", file_path)
+    print("Dosya boyutu:", os.path.getsize(file_path), "byte")
+    audio_stats = calculate_audio_stats(file_path)
+    print("Ses istatistikleri:", audio_stats)
     try:
-        segments, info = model.transcribe(
+        transcript, info = transcribe_audio_file(
             file_path,
-            language="tr",
-            beam_size=5
+            vad_filter=WHISPER_VAD_FILTER,
+            reference_text=reference_text,
         )
 
-        transcript = " ".join(segment.text.strip() for segment in segments).strip()
+        if not transcript:
+            normalized_path, normalized_stats = normalize_audio_if_quiet(
+                file_path,
+                audio_stats,
+            )
+
+            if normalized_path != file_path:
+                cleanup_paths.append(normalized_path)
+                transcript, info = transcribe_audio_file(
+                    normalized_path,
+                    vad_filter=False,
+                    reference_text=reference_text,
+                )
+                audio_stats = normalized_stats
+
+        print("Whisper transcript:", transcript)
 
         comparison = compare_texts(reference_text, transcript)
 
-        save_reading_session(
+        session_result = save_reading_session(
+            student_id=student_id,
+            text_id=text_id,
             student_name="Gülhan Test Öğrencisi",
             reference_text=reference_text,
             transcript=transcript,
@@ -250,10 +847,16 @@ async def analyze_audio(
             correct_count=comparison["correct_count"],
             substitution_count=comparison["substitution_count"],
             deletion_count=comparison["deletion_count"],
-            insertion_count=comparison["insertion_count"]
+            insertion_count=comparison["insertion_count"],
         )
+        
+
 
         return {
+            "session_id": session_result["session_id"],
+            "stars": session_result["stars"],
+            "passed": session_result["passed"],
+            "level_progress": session_result["level_progress"],
             "message": "Ses başarıyla analiz edildi",
             "reference_text": reference_text,
             "transcript": transcript,
@@ -263,16 +866,55 @@ async def analyze_audio(
             "substitution_count": comparison["substitution_count"],
             "deletion_count": comparison["deletion_count"],
             "insertion_count": comparison["insertion_count"],
-            "word_analysis": comparison["analysis"]
+            "word_analysis": comparison["analysis"],
+            "audio_debug": audio_stats
         }
 
     except Exception as e:
+        print("Analyze audio error:", str(e))
         return {
             "message": "Ses analiz edilirken hata oluştu",
-            "error": str(e)
-        }
+            "error": str(e),
+            "audio_debug": audio_stats
+    }
+    finally:
+        for cleanup_path in cleanup_paths:
+            try:
+                if cleanup_path and os.path.exists(cleanup_path):
+                    os.remove(cleanup_path)
+            except Exception as cleanup_error:
+                print("Gecici ses dosyasi silinemedi:", cleanup_path, cleanup_error)
+
+@app.get("/students")
+def students():
+    return {
+        "students": get_students()
+    }
+
+
+@app.get("/levels")
+def levels():
+    return {
+        "levels": get_levels()
+    }
+
+
 @app.get("/sessions")
 def sessions():
     return {
-    "sessions": get_all_sessions()
-}
+        "sessions": get_all_sessions()
+    }
+
+
+@app.get("/student-progress/{student_id}")
+def student_progress(student_id: int):
+    return {
+        "progress": get_student_progress(student_id)
+    }
+
+
+@app.get("/student-texts/{student_id}")
+def student_texts(student_id: int):
+    return {
+        "texts": get_texts_by_unlocked_levels(student_id)
+    }
