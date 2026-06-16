@@ -14,7 +14,8 @@ from database import (
     get_levels,
     get_student_progress,
     get_texts_by_unlocked_levels,
-    refresh_all_student_progress
+    refresh_all_student_progress,
+    get_home_summary,
 )
 import os
 import shutil
@@ -848,6 +849,7 @@ async def analyze_audio(
             substitution_count=comparison["substitution_count"],
             deletion_count=comparison["deletion_count"],
             insertion_count=comparison["insertion_count"],
+            duration_seconds=audio_stats.get("duration_seconds", 0),
         )
         
 
@@ -917,4 +919,10 @@ def student_progress(student_id: int):
 def student_texts(student_id: int):
     return {
         "texts": get_texts_by_unlocked_levels(student_id)
+    }
+
+@app.get("/home-summary/{student_id}")
+def home_summary(student_id: int):
+    return {
+        "summary": get_home_summary(student_id)
     }

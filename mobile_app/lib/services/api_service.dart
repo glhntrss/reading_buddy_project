@@ -91,4 +91,16 @@ class ApiService {
 
     throw Exception("Ses analizi başarısız: $responseBody");
   }
+  static Future<Map<String, dynamic>> getHomeSummary(int studentId) async {
+  final response = await http
+      .get(Uri.parse("$baseUrl/home-summary/$studentId"))
+      .timeout(const Duration(seconds: 8));
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data["summary"] ?? {};
+  }
+
+  throw Exception("Ana sayfa özeti alınamadı: ${response.body}");
+}
 }

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../widgets/daily_goal_card.dart';
+import '../widgets/home_header_card.dart';
+import '../widgets/level_progress_card.dart';
+import '../widgets/mascot_card.dart';
+import '../widgets/streak_card.dart';
 
 class HomePage extends StatefulWidget {
   final VoidCallback onStartReading;
@@ -19,6 +24,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Map<String, dynamic>? student;
   Map<String, dynamic>? firstText;
+  Map<String, dynamic>? homeSummary;
+
+  List<dynamic> progress = [];
+
   bool isLoading = true;
 
   @override
@@ -32,11 +41,17 @@ class _HomePageState extends State<HomePage> {
       final students = await ApiService.getStudents();
 
       if (students.isNotEmpty) {
-        final texts = await ApiService.getStudentTexts(students.first["id"]);
+        final selectedStudent = students.first;
+        final texts = await ApiService.getStudentTexts(selectedStudent["id"]);
+        final studentProgress =
+            await ApiService.getStudentProgress(selectedStudent["id"]);
+        final summary = await ApiService.getHomeSummary(selectedStudent["id"]);
 
         setState(() {
-          student = students.first;
+          student = selectedStudent;
           firstText = texts.isNotEmpty ? texts.first : null;
+          progress = studentProgress;
+          homeSummary = summary;
           isLoading = false;
         });
       } else {
@@ -51,6 +66,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  double calculateLevelProgress() {
+    if (student == null || progress.isEmpty) {
+      return 0.0;
+    }
+
+    final currentLevel = student!["current_level"] ?? 1;
+
+    final matched = progress.where(
+      (level) => level["level_id"] == currentLevel,
+    );
+
+    if (matched.isEmpty) {
+      return 0.0;
+    }
+
+    final level = matched.first;
+    final int bestStars = level["best_stars"] ?? 0;
+
+    return (bestStars / 3).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -59,95 +95,111 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 18),
+    final studentName = student?["name"] ?? "Test Öğrencisi";
 
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6C63FF),
-              borderRadius: BorderRadius.circular(26),
+    final currentLevel =
+    ((homeSummary?["current_level"] ?? student?["current_level"] ?? 1) as num)
+        .toInt();
+
+    final levelProgress =
+    ((homeSummary?["level_progress"] ?? calculateLevelProgress()) as num)
+        .toDouble();
+
+    final dailyGoalMinutes =
+    ((homeSummary?["daily_goal_minutes"] ?? 5) as num).toInt();
+
+    final todayCompletedMinutes =
+    ((homeSummary?["today_completed_minutes"] ?? 0) as num).toInt();
+
+    final streakDays =
+    ((homeSummary?["streak_days"] ?? 0) as num).toInt();
+
+    return RefreshIndicator(
+      onRefresh: loadHomeData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 18),
+
+            HomeHeaderCard(
+              studentName: studentName,
             ),
-            child: Column(
+
+            const SizedBox(height: 26),
+
+            LevelProgressCard(
+              currentLevel: currentLevel,
+              progress: levelProgress,
+            ),
+
+            const SizedBox(height: 20),
+
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  student == null
-                      ? "Merhaba"
-                      : "Merhaba, ${student!["name"]}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    children: [
+                      DailyGoalCard(
+                        completedMinutes: todayCompletedMinutes,
+                        goalMinutes: dailyGoalMinutes,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      StreakCard(
+                        streakDays: streakDays,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  student == null
-                      ? "Bugün okumaya hazır mısın?"
-                      : "Mevcut seviyen: ${student!["current_level"]}",
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
+
+                const SizedBox(width: 16),
+
+                const Expanded(
+                  child: MascotCard(),
                 ),
               ],
             ),
-          ),
 
-          const SizedBox(height: 18),
+            const SizedBox(height: 26),
 
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1EFFF),
-              borderRadius: BorderRadius.circular(26),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.play_arrow),
+              label: Text(
+                firstText == null
+                    ? "Okumaya Başla"
+                    : "${firstText!["title"]} ile Başla",
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C63FF),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              onPressed: widget.onStartReading,
             ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.menu_book,
-                  size: 42,
-                  color: Color(0xFF6C63FF),
+
+            const SizedBox(height: 12),
+
+            OutlinedButton.icon(
+              icon: const Icon(Icons.emoji_events),
+              label: const Text("Seviyeleri Gör"),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  "Bugünkü Okuma Görevi",
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  firstText?["title"] ?? "Okuma metni bulunamadı.",
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text("Okumaya Başla"),
-                    onPressed: widget.onStartReading,
-                  ),
-                ),
-              ],
+              ),
+              onPressed: widget.onOpenLevels,
             ),
-          ),
-
-          const SizedBox(height: 14),
-
-          OutlinedButton.icon(
-            icon: const Icon(Icons.emoji_events),
-            label: const Text("Seviyeleri Gör"),
-            onPressed: widget.onOpenLevels,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

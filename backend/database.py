@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_NAME = "reading_buddy.db"
 
@@ -71,6 +71,7 @@ def create_tables():
             substitution_count INTEGER,
             deletion_count INTEGER,
             insertion_count INTEGER,
+            duration_seconds REAL DEFAULT 0,  
             created_at TEXT
         )
     """)
@@ -91,6 +92,7 @@ def create_tables():
     add_column_if_not_exists(cursor, "reading_sessions", "text_id", "INTEGER")
     add_column_if_not_exists(cursor, "reading_sessions", "stars", "INTEGER")
     add_column_if_not_exists(cursor, "reading_sessions", "passed", "INTEGER")
+    add_column_if_not_exists(cursor, "reading_sessions", "duration_seconds", "REAL DEFAULT 0")
 
     connection.commit()
     connection.close()
@@ -410,7 +412,9 @@ def save_reading_session(
     correct_count,
     substitution_count,
     deletion_count,
-    insertion_count
+    insertion_count,
+    duration_seconds=0
+
 ):
     stars = calculate_stars(war, wer)
     passed = 1 if stars >= 2 else 0
@@ -433,9 +437,10 @@ def save_reading_session(
             substitution_count,
             deletion_count,
             insertion_count,
+            duration_seconds,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         student_id,
         text_id,
@@ -450,6 +455,7 @@ def save_reading_session(
         substitution_count,
         deletion_count,
         insertion_count,
+        duration_seconds,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     session_id = cursor.lastrowid
@@ -577,3 +583,84 @@ def get_student_progress(student_id):
     connection.close()
 
     return result
+
+def get_home_summary(student_id):
+    daily_goal_minutes = 5
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    student = cursor.fetchone()
+
+    if not student:
+        connection.close()
+        return {
+            "daily_goal_minutes": daily_goal_minutes,
+            "today_completed_minutes": 0,
+            "daily_goal_completed": False,
+            "streak_days": 0,
+            "current_level": 1,
+            "level_progress": 0.0,
+        }
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    cursor.execute("""
+        SELECT duration_seconds
+        FROM reading_sessions
+        WHERE student_id = ?
+          AND substr(created_at, 1, 10) = ?
+    """, (student_id, today))
+
+    today_sessions = cursor.fetchall()
+
+    today_completed_minutes = 0
+
+    for session in today_sessions:
+        seconds = session["duration_seconds"] or 0
+
+        if seconds > 0:
+            # Demo için kısa okumaları da 1 dk sayıyoruz.
+            today_completed_minutes += max(1, round(seconds / 60))
+
+    today_completed_minutes = min(today_completed_minutes, daily_goal_minutes)
+    daily_goal_completed = today_completed_minutes >= daily_goal_minutes
+
+    cursor.execute("""
+        SELECT DISTINCT substr(created_at, 1, 10) AS day
+        FROM reading_sessions
+        WHERE student_id = ?
+        ORDER BY day DESC
+    """, (student_id,))
+
+    active_days = {
+        row["day"]
+        for row in cursor.fetchall()
+        if row["day"]
+    }
+
+    streak_days = 0
+    check_day = datetime.now().date()
+
+    while check_day.strftime("%Y-%m-%d") in active_days:
+        streak_days += 1
+        check_day -= timedelta(days=1)
+
+    current_level = student["current_level"] or 1
+    level_summary = get_level_progress_summary(cursor, student_id, current_level)
+
+    level_progress = 0.0
+    if level_summary:
+        level_progress = (level_summary["progress_percent"] or 0) / 100
+
+    connection.close()
+
+    return {
+        "daily_goal_minutes": daily_goal_minutes,
+        "today_completed_minutes": today_completed_minutes,
+        "daily_goal_completed": daily_goal_completed,
+        "streak_days": streak_days,
+        "current_level": current_level,
+        "level_progress": level_progress,
+    }
