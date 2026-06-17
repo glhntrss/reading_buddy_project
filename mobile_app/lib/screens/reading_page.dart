@@ -10,16 +10,15 @@ import '../widgets/progress_metric.dart';
 import '../widgets/stat_card.dart';
 
 class ReadingPage extends StatefulWidget {
+  final Map<String, dynamic> student;
   final int? selectedLevelId;
 
-  const ReadingPage({
-    super.key,
-    this.selectedLevelId,
-  });
+  const ReadingPage({super.key, required this.student, this.selectedLevelId});
 
   @override
   State<ReadingPage> createState() => _ReadingPageState();
 }
+
 class _ReadingPageState extends State<ReadingPage> {
   final AudioRecorder recorder = AudioRecorder();
 
@@ -33,7 +32,6 @@ class _ReadingPageState extends State<ReadingPage> {
   Map<String, dynamic>? selectedStudent;
   Map<String, dynamic>? selectedText;
 
-  List<dynamic> students = [];
   List<dynamic> readingTexts = [];
 
   String referenceText = "";
@@ -58,128 +56,122 @@ class _ReadingPageState extends State<ReadingPage> {
 
   @override
   void initState() {
-
     super.initState();
     loadReadingData();
   }
 
   @override
   void didUpdateWidget(covariant ReadingPage oldWidget) {
-  super.didUpdateWidget(oldWidget);
+    super.didUpdateWidget(oldWidget);
 
-  if (widget.selectedLevelId != oldWidget.selectedLevelId) {
-    selectTextByLevel(widget.selectedLevelId);
+    if (widget.selectedLevelId != oldWidget.selectedLevelId) {
+      selectTextByLevel(widget.selectedLevelId);
+    }
   }
-}
 
-void selectTextByLevel(int? levelId) {
-  if (levelId == null || readingTexts.isEmpty) return;
+  void selectTextByLevel(int? levelId) {
+    if (levelId == null || readingTexts.isEmpty) return;
 
-  final matchedTexts = readingTexts.where(
-    (text) => text["level_id"] == levelId,
-  );
-
-  if (matchedTexts.isNotEmpty) {
-    final pendingTexts = matchedTexts.where(
-      (text) => text["is_passed"] != 1,
+    final matchedTexts = readingTexts.where(
+      (text) => text["level_id"] == levelId,
     );
-    final chosenText = pendingTexts.isNotEmpty
-        ? pendingTexts.first
-        : matchedTexts.first;
+
+    if (matchedTexts.isNotEmpty) {
+      final pendingTexts = matchedTexts.where((text) => text["is_passed"] != 1);
+      final chosenText = pendingTexts.isNotEmpty
+          ? pendingTexts.first
+          : matchedTexts.first;
+
+      setState(() {
+        selectedText = chosenText;
+        referenceText = chosenText["content"] ?? "";
+        resetAnalysisResult();
+      });
+    }
+  }
+
+  void selectTextById(int? textId) {
+    if (textId == null || readingTexts.isEmpty) return;
+
+    final matchedTexts = readingTexts.where((text) => text["id"] == textId);
+
+    if (matchedTexts.isEmpty) return;
+
+    final chosenText = matchedTexts.first;
 
     setState(() {
       selectedText = chosenText;
       referenceText = chosenText["content"] ?? "";
+      recordedFilePath = null;
       resetAnalysisResult();
     });
   }
-}
 
-void selectTextById(int? textId) {
-  if (textId == null || readingTexts.isEmpty) return;
+  void selectNextPendingTextByLevel(int? levelId) {
+    if (levelId == null || readingTexts.isEmpty) return;
 
-  final matchedTexts = readingTexts.where(
-    (text) => text["id"] == textId,
-  );
+    final levelTexts = readingTexts
+        .where((text) => text["level_id"] == levelId)
+        .toList();
 
-  if (matchedTexts.isEmpty) return;
+    if (levelTexts.isEmpty) return;
 
-  final chosenText = matchedTexts.first;
+    final pendingTexts = levelTexts.where((text) => text["is_passed"] != 1);
 
-  setState(() {
-    selectedText = chosenText;
-    referenceText = chosenText["content"] ?? "";
-    recordedFilePath = null;
-    resetAnalysisResult();
-  });
-}
+    final chosenText = pendingTexts.isNotEmpty
+        ? pendingTexts.first
+        : levelTexts.first;
 
-void selectNextPendingTextByLevel(int? levelId) {
-  if (levelId == null || readingTexts.isEmpty) return;
-
-  final levelTexts = readingTexts
-      .where((text) => text["level_id"] == levelId)
-      .toList();
-
-  if (levelTexts.isEmpty) return;
-
-  final pendingTexts = levelTexts.where(
-    (text) => text["is_passed"] != 1,
-  );
-
-  final chosenText = pendingTexts.isNotEmpty
-      ? pendingTexts.first
-      : levelTexts.first;
-
-  setState(() {
-    selectedText = chosenText;
-    referenceText = chosenText["content"] ?? "";
-    recordedFilePath = null;
-    resetAnalysisResult();
-  });
-}
-
-double selectedLevelProgressPercent() {
-  final levelId = selectedText?["level_id"];
-  if (levelId == null || readingTexts.isEmpty) return 0;
-
-  final levelTexts = readingTexts.where(
-    (text) => text["level_id"] == levelId,
-  );
-
-  final total = levelTexts.length;
-  if (total == 0) return 0;
-
-  final completed = levelTexts.where(
-    (text) => text["is_passed"] == 1,
-  ).length;
-
-  return (completed / total) * 100;
-}
-
-String selectedLevelProgressLabel() {
-  final levelId = selectedText?["level_id"];
-  if (levelId == null || readingTexts.isEmpty) {
-    return "Seviye ilerlemesi";
+    setState(() {
+      selectedText = chosenText;
+      referenceText = chosenText["content"] ?? "";
+      recordedFilePath = null;
+      resetAnalysisResult();
+    });
   }
 
-  final levelTexts = readingTexts.where(
-    (text) => text["level_id"] == levelId,
-  );
-  final completed = levelTexts.where(
-    (text) => text["is_passed"] == 1,
-  ).length;
+  double selectedLevelProgressPercent() {
+    final levelId = selectedText?["level_id"];
+    if (levelId == null || readingTexts.isEmpty) return 0;
 
-  return "$completed / ${levelTexts.length} okuma tamamlandı";
-}
+    final levelTexts = readingTexts.where(
+      (text) => text["level_id"] == levelId,
+    );
 
-dynamic firstPendingText(Iterable<dynamic> texts) {
-  final pendingTexts = texts.where(
-    (text) => text["is_passed"] != 1,
-  );
+    final total = levelTexts.length;
+    if (total == 0) return 0;
 
-  return pendingTexts.isNotEmpty ? pendingTexts.first : texts.first;
-}
+    final completed = levelTexts.where((text) => text["is_passed"] == 1).length;
+
+    return (completed / total) * 100;
+  }
+
+  String selectedLevelProgressLabel() {
+    final levelId = selectedText?["level_id"];
+    if (levelId == null || readingTexts.isEmpty) {
+      return "Seviye ilerlemesi";
+    }
+
+    final levelTexts = readingTexts.where(
+      (text) => text["level_id"] == levelId,
+    );
+    final completed = levelTexts.where((text) => text["is_passed"] == 1).length;
+
+    return "$completed / ${levelTexts.length} okuma tamamlandı";
+  }
+
+  dynamic firstPendingText(Iterable<dynamic> texts) {
+    final assignedTexts = texts.where(
+      (text) => text["is_assigned"] == 1 && text["is_passed"] != 1,
+    );
+
+    if (assignedTexts.isNotEmpty) return assignedTexts.first;
+
+    final pendingTexts = texts.where((text) => text["is_passed"] != 1);
+
+    return pendingTexts.isNotEmpty ? pendingTexts.first : texts.first;
+  }
+
   @override
   void dispose() {
     recorder.dispose();
@@ -189,9 +181,9 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
   void showMessage(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String starsText(int count) {
@@ -201,29 +193,28 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
 
   Future<void> loadReadingData() async {
     try {
-      students = await ApiService.getStudents();
+      selectedStudent = widget.student;
 
-      if (students.isNotEmpty) {
-        selectedStudent = students.first;
+      if (selectedStudent?["id"] != null) {
         readingTexts = await ApiService.getStudentTexts(selectedStudent!["id"]);
 
         if (readingTexts.isNotEmpty) {
-  if (widget.selectedLevelId != null) {
-    final matchedTexts = readingTexts.where(
-      (text) => text["level_id"] == widget.selectedLevelId,
-    );
+          if (widget.selectedLevelId != null) {
+            final matchedTexts = readingTexts.where(
+              (text) => text["level_id"] == widget.selectedLevelId,
+            );
 
-    if (matchedTexts.isNotEmpty) {
-      selectedText = firstPendingText(matchedTexts);
-    } else {
-      selectedText = firstPendingText(readingTexts);
-    }
-  } else {
-    selectedText = firstPendingText(readingTexts);
-  }
+            if (matchedTexts.isNotEmpty) {
+              selectedText = firstPendingText(matchedTexts);
+            } else {
+              selectedText = firstPendingText(readingTexts);
+            }
+          } else {
+            selectedText = firstPendingText(readingTexts);
+          }
 
-  referenceText = selectedText!["content"] ?? "";
-}
+          referenceText = selectedText!["content"] ?? "";
+        }
       }
     } catch (e) {
       showMessage("Okuma verileri alınamadı: $e");
@@ -355,10 +346,8 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
         final action = await Navigator.push<Map<String, dynamic>>(
           context,
           MaterialPageRoute(
-            builder: (_) => AnalysisResultPage(
-              data: data,
-              selectedText: selectedText,
-            ),
+            builder: (_) =>
+                AnalysisResultPage(data: data, selectedText: selectedText),
           ),
         );
 
@@ -394,9 +383,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     return SingleChildScrollView(
@@ -415,10 +402,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
               children: [
                 const Text(
                   "Okuma Görevi",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 16),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -463,9 +447,12 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                 prefixIcon: const Icon(Icons.menu_book),
               ),
               items: readingTexts.map<DropdownMenuItem<int>>((text) {
+                final isAssigned = text["is_assigned"] == 1;
                 return DropdownMenuItem<int>(
                   value: text["id"],
-                  child: Text(text["title"]),
+                  child: Text(
+                    isAssigned ? "Ödev • ${text["title"]}" : text["title"],
+                  ),
                 );
               }).toList(),
               onChanged: (value) {
@@ -488,9 +475,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
             decoration: BoxDecoration(
               color: softPurple,
               borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: primaryColor.withValues(alpha: 0.25),
-              ),
+              border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
             ),
             child: Column(
               children: [
@@ -502,10 +487,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                 const SizedBox(height: 14),
                 const Text(
                   "Okunacak Metin",
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -624,20 +606,14 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                 children: [
                   const Text(
                     "Sistemin Algıladığı Metin",
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     detectedText.isEmpty
                         ? "Ses algılanamadı. Lütfen tekrar dene."
                         : detectedText,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.5,
-                    ),
+                    style: const TextStyle(fontSize: 16, height: 1.5),
                   ),
                 ],
               ),
@@ -656,10 +632,7 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                 children: [
                   const Text(
                     "Okuma Sonucu",
-                    style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -678,15 +651,9 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
                     style: const TextStyle(fontSize: 15),
                   ),
                   const SizedBox(height: 20),
-                  ProgressMetric(
-                    title: "Okuma Başarısı",
-                    value: war,
-                  ),
+                  ProgressMetric(title: "Okuma Başarısı", value: war),
                   const SizedBox(height: 14),
-                  ProgressMetric(
-                    title: "Hata Oranı",
-                    value: wer,
-                  ),
+                  ProgressMetric(title: "Hata Oranı", value: wer),
                 ],
               ),
             ),
@@ -697,17 +664,11 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
             Row(
               children: [
                 Expanded(
-                  child: StatCard(
-                    title: "Doğru",
-                    value: "$correctCount",
-                  ),
+                  child: StatCard(title: "Doğru", value: "$correctCount"),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: StatCard(
-                    title: "Yanlış",
-                    value: "$substitutionCount",
-                  ),
+                  child: StatCard(title: "Yanlış", value: "$substitutionCount"),
                 ),
               ],
             ),
@@ -718,17 +679,11 @@ dynamic firstPendingText(Iterable<dynamic> texts) {
             Row(
               children: [
                 Expanded(
-                  child: StatCard(
-                    title: "Eksik",
-                    value: "$deletionCount",
-                  ),
+                  child: StatCard(title: "Eksik", value: "$deletionCount"),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: StatCard(
-                    title: "Fazla",
-                    value: "$insertionCount",
-                  ),
+                  child: StatCard(title: "Fazla", value: "$insertionCount"),
                 ),
               ],
             ),

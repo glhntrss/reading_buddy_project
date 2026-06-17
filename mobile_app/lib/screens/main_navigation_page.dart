@@ -9,10 +9,7 @@ import '../widgets/app_logo_header.dart';
 class MainNavigationPage extends StatefulWidget {
   final Map<String, dynamic> student;
 
-  const MainNavigationPage({
-    super.key,
-    required this.student,
-  });
+  const MainNavigationPage({super.key, required this.student});
 
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
@@ -20,11 +17,14 @@ class MainNavigationPage extends StatefulWidget {
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int selectedTabIndex = 0;
- int? selectedLevelId;
+  int? selectedLevelId;
+
   @override
   Widget build(BuildContext context) {
+    final studentId = widget.student["id"] ?? 1;
     final List<Widget> pages = [
       HomePage(
+        student: widget.student,
         onStartReading: () {
           setState(() {
             selectedTabIndex = 1;
@@ -36,11 +36,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           });
         },
       ),
-      ReadingPage(
-        selectedLevelId: selectedLevelId,
-),
-
+      ReadingPage(student: widget.student, selectedLevelId: selectedLevelId),
       LevelsPage(
+        studentId: studentId,
         onLevelSelected: (levelId) {
           setState(() {
             selectedLevelId = levelId;
@@ -48,20 +46,18 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           });
         },
       ),
-      const ProfilePage(),
+      ProfilePage(student: widget.student),
     ];
 
     return Scaffold(
-     appBar: AppBar(
-  automaticallyImplyLeading: false,
-  centerTitle: true,
-  toolbarHeight: 82,
-  backgroundColor: const Color(0xFFFCF7FF),
-  elevation: 0,
-  title: const AppLogoHeader(
-    height: 200,
-  ),
-),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        toolbarHeight: 82,
+        backgroundColor: const Color(0xFFFCF7FF),
+        elevation: 0,
+        title: const AppLogoHeader(height: 200),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
@@ -79,22 +75,13 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           });
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Ana Sayfa",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.menu_book),
-            label: "Okuma",
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Ana Sayfa"),
+          BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: "Okuma"),
           BottomNavigationBarItem(
             icon: Icon(Icons.emoji_events),
             label: "Seviyeler",
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Profil",
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profil"),
         ],
       ),
     );

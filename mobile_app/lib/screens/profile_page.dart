@@ -1,88 +1,38 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_service.dart';
 import 'student_report_page.dart';
 
-class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+class ProfilePage extends StatelessWidget {
+  final Map<String, dynamic> student;
 
-  @override
-  State<ProfilePage> createState() => _ProfilePageState();
-}
-
-class _ProfilePageState extends State<ProfilePage> {
-  Map<String, dynamic>? student;
-  bool isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    loadStudent();
-  }
-
-  Future<void> loadStudent() async {
-    try {
-      final students = await ApiService.getStudents();
-
-      setState(() {
-        student = students.isNotEmpty ? students.first : null;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
+  const ProfilePage({super.key, required this.student});
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 20),
-
           const CircleAvatar(
             radius: 48,
             backgroundColor: Color(0xFFF1EFFF),
-            child: Icon(
-              Icons.person,
-              size: 52,
-              color: Color(0xFF6C63FF),
-            ),
+            child: Icon(Icons.person, size: 52, color: Color(0xFF6C63FF)),
           ),
-
           const SizedBox(height: 16),
-
           Text(
-            student?["name"] ?? "Öğrenci",
+            student["name"] ?? "Öğrenci",
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 6),
-
           Text(
-            student == null
-                ? ""
-                : "${student!["age"]} yaş • ${student!["grade"]}",
+            "${student["age"] ?? "-"} yaş • ${student["grade"] ?? "Sınıf bilgisi yok"}",
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.black54),
           ),
-
           const SizedBox(height: 26),
-
           Card(
             child: ListTile(
               leading: const Icon(Icons.edit),
@@ -91,7 +41,6 @@ class _ProfilePageState extends State<ProfilePage> {
               onTap: () {},
             ),
           ),
-
           Card(
             child: ListTile(
               leading: const Icon(Icons.bar_chart),
@@ -101,15 +50,13 @@ class _ProfilePageState extends State<ProfilePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => StudentReportPage(
-                      studentId: student?["id"] ?? 1,
-                    ),
+                    builder: (_) =>
+                        StudentReportPage(studentId: student["id"] ?? 1),
                   ),
                 );
               },
             ),
           ),
-
           Card(
             child: ListTile(
               leading: const Icon(Icons.settings),

@@ -19,6 +19,8 @@ from database import (
     register_student_user,
     register_teacher_user,
     login_user,
+    create_reading_assignment,
+    get_reading_assignments,
 )
 from ml_report import build_student_report
 import os
@@ -1004,6 +1006,13 @@ def levels():
     }
 
 
+@app.get("/reading-texts")
+def reading_texts():
+    return {
+        "texts": get_reading_texts()
+    }
+
+
 @app.get("/sessions")
 def sessions():
     return {
@@ -1023,6 +1032,50 @@ def student_texts(student_id: int):
     return {
         "texts": get_texts_by_unlocked_levels(student_id)
     }
+
+
+@app.get("/assignments")
+def assignments(teacher_id: int | None = None, student_id: int | None = None):
+    return {
+        "assignments": get_reading_assignments(
+            teacher_id=teacher_id,
+            student_id=student_id,
+        )
+    }
+
+
+@app.get("/student-assignments/{student_id}")
+def student_assignments(student_id: int):
+    return {
+        "assignments": get_reading_assignments(student_id=student_id)
+    }
+
+
+@app.post("/assignments")
+def create_assignment(
+    teacher_id: int = Form(...),
+    student_id: int = Form(...),
+    text_id: int = Form(...),
+    due_date: str = Form(""),
+    note: str = Form("")
+):
+    try:
+        assignment = create_reading_assignment(
+            teacher_id=teacher_id,
+            student_id=student_id,
+            text_id=text_id,
+            due_date=due_date,
+            note=note,
+        )
+
+        return {
+            "message": "Ödev başarıyla atandı.",
+            "assignment": assignment
+        }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
 
 @app.get("/home-summary/{student_id}")
 def home_summary(student_id: int):

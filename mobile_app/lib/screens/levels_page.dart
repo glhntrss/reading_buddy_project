@@ -4,10 +4,12 @@ import '../services/api_service.dart';
 import '../widgets/level_card.dart';
 
 class LevelsPage extends StatefulWidget {
+  final int studentId;
   final void Function(int levelId) onLevelSelected;
 
   const LevelsPage({
     super.key,
+    required this.studentId,
     required this.onLevelSelected,
   });
 
@@ -27,7 +29,7 @@ class _LevelsPageState extends State<LevelsPage> {
 
   Future<void> loadLevels() async {
     try {
-      final progress = await ApiService.getStudentProgress(1);
+      final progress = await ApiService.getStudentProgress(widget.studentId);
 
       setState(() {
         levelProgress = progress;
@@ -43,9 +45,7 @@ class _LevelsPageState extends State<LevelsPage> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     return RefreshIndicator(
@@ -58,20 +58,14 @@ class _LevelsPageState extends State<LevelsPage> {
           children: [
             const Text(
               "Seviyeler",
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 6),
 
             const Text(
               "Okuma yolculuğunda ilerle ve yeni seviyeleri aç.",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black54,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black54),
             ),
 
             const SizedBox(height: 22),
@@ -93,7 +87,7 @@ class _LevelsPageState extends State<LevelsPage> {
                 final bool isCompleted = level["is_completed"] == 1;
                 final int bestStars = level["best_stars"] ?? 0;
 
-              return LevelCard(
+                return LevelCard(
                   title: level["title"] ?? "Seviye",
                   description: level["description"] ?? "",
                   bestStars: bestStars,

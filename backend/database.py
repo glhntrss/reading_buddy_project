@@ -351,6 +351,20 @@ def create_tables():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reading_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            teacher_id INTEGER,
+            student_id INTEGER,
+            text_id INTEGER,
+            note TEXT,
+            due_date TEXT,
+            status TEXT DEFAULT 'assigned',
+            completed_at TEXT,
+            created_at TEXT
+        )
+    """)
+
     # Eski reading_sessions tablosu varsa eksik kolonları ekler
     add_column_if_not_exists(cursor, "reading_sessions", "student_id", "INTEGER")
     add_column_if_not_exists(cursor, "reading_sessions", "text_id", "INTEGER")
@@ -552,13 +566,40 @@ def get_texts_by_unlocked_levels(student_id):
                 WHERE rs.student_id = ?
                   AND rs.text_id = rt.id
             ), 0) AS best_stars
+            ,
+            COALESCE((
+                SELECT MAX(ra.id)
+                FROM reading_assignments ra
+                WHERE ra.student_id = ?
+                  AND ra.text_id = rt.id
+                  AND ra.status = 'assigned'
+            ), 0) AS assignment_id,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM reading_assignments ra
+                    WHERE ra.student_id = ?
+                      AND ra.text_id = rt.id
+                      AND ra.status = 'assigned'
+                ) THEN 1
+                ELSE 0
+            END AS is_assigned
         FROM reading_texts rt
         INNER JOIN student_progress sp
             ON rt.level_id = sp.level_id
         WHERE sp.student_id = ?
-          AND sp.is_unlocked = 1
+          AND (
+            sp.is_unlocked = 1
+            OR EXISTS (
+                SELECT 1
+                FROM reading_assignments ra
+                WHERE ra.student_id = ?
+                  AND ra.text_id = rt.id
+                  AND ra.status = 'assigned'
+            )
+          )
         ORDER BY rt.level_id ASC, rt.id ASC
-    """, (student_id, student_id, student_id))
+    """, (student_id, student_id, student_id, student_id, student_id, student_id))
 
     rows = cursor.fetchall()
     connection.close()
@@ -790,6 +831,21 @@ def save_reading_session(
                             student_id
                         ))
 
+            if passed == 1:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("""
+                    UPDATE reading_assignments
+                    SET status = 'completed',
+                        completed_at = ?
+                    WHERE student_id = ?
+                      AND text_id = ?
+                      AND status != 'completed'
+                """, (
+                    now,
+                    student_id,
+                    text_id,
+                ))
+
     connection.commit()
     connection.close()
 
@@ -860,6 +916,117 @@ def get_student_progress(student_id):
     connection.close()
 
     return result
+
+
+def get_assignment_by_id(assignment_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            ra.*,
+            s.name AS student_name,
+            rt.title AS text_title,
+            rt.content AS text_content,
+            rt.level AS text_level,
+            rt.level_id AS level_id,
+            t.name AS teacher_name
+        FROM reading_assignments ra
+        LEFT JOIN students s ON s.id = ra.student_id
+        LEFT JOIN reading_texts rt ON rt.id = ra.text_id
+        LEFT JOIN teachers t ON t.id = ra.teacher_id
+        WHERE ra.id = ?
+    """, (assignment_id,))
+
+    row = cursor.fetchone()
+    connection.close()
+    return dict(row) if row else None
+
+
+def create_reading_assignment(teacher_id, student_id, text_id, due_date="", note=""):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT id FROM students WHERE id = ?", (student_id,))
+    if cursor.fetchone() is None:
+        connection.close()
+        raise Exception("Öğrenci bulunamadı.")
+
+    cursor.execute("SELECT id FROM reading_texts WHERE id = ?", (text_id,))
+    if cursor.fetchone() is None:
+        connection.close()
+        raise Exception("Okuma metni bulunamadı.")
+
+    cursor.execute("""
+        INSERT INTO reading_assignments (
+            teacher_id,
+            student_id,
+            text_id,
+            note,
+            due_date,
+            status,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        teacher_id,
+        student_id,
+        text_id,
+        note,
+        due_date,
+        "assigned",
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    ))
+
+    assignment_id = cursor.lastrowid
+    connection.commit()
+    connection.close()
+
+    return get_assignment_by_id(assignment_id)
+
+
+def get_reading_assignments(teacher_id=None, student_id=None):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    conditions = []
+    params = []
+
+    if teacher_id is not None:
+        conditions.append("ra.teacher_id = ?")
+        params.append(teacher_id)
+
+    if student_id is not None:
+        conditions.append("ra.student_id = ?")
+        params.append(student_id)
+
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+    cursor.execute(f"""
+        SELECT
+            ra.*,
+            s.name AS student_name,
+            rt.title AS text_title,
+            rt.content AS text_content,
+            rt.level AS text_level,
+            rt.level_id AS level_id,
+            t.name AS teacher_name
+        FROM reading_assignments ra
+        LEFT JOIN students s ON s.id = ra.student_id
+        LEFT JOIN reading_texts rt ON rt.id = ra.text_id
+        LEFT JOIN teachers t ON t.id = ra.teacher_id
+        {where_clause}
+        ORDER BY
+            CASE ra.status WHEN 'assigned' THEN 0 ELSE 1 END,
+            COALESCE(ra.due_date, '') ASC,
+            ra.created_at DESC
+    """, params)
+
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+    return rows
 
 def get_home_summary(student_id):
     daily_goal_minutes = 5
