@@ -16,10 +16,11 @@ class ReadingPage extends StatefulWidget {
   const ReadingPage({super.key, required this.student, this.selectedLevelId});
 
   @override
+  // Animasyon kullanabilmek için SingleTickerProviderStateMixin eklendi
   State<ReadingPage> createState() => _ReadingPageState();
 }
 
-class _ReadingPageState extends State<ReadingPage> {
+class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStateMixin {
   final AudioRecorder recorder = AudioRecorder();
 
   bool isLoading = true;
@@ -54,9 +55,23 @@ class _ReadingPageState extends State<ReadingPage> {
   final Color softLilac = const Color(0xFFF3EFFF);
   final Color softYellow = const Color(0xFFFFF8E1);
 
+  // --- Animasyon Değişkenleri ---
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    // Animasyon Ayarları (800ms içinde %15 büyüyüp küçülecek)
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     loadReadingData();
   }
 
@@ -73,7 +88,7 @@ class _ReadingPageState extends State<ReadingPage> {
     if (levelId == null || readingTexts.isEmpty) return;
 
     final matchedTexts = readingTexts.where(
-      (text) => text["level_id"] == levelId,
+          (text) => text["level_id"] == levelId,
     );
 
     if (matchedTexts.isNotEmpty) {
@@ -135,7 +150,7 @@ class _ReadingPageState extends State<ReadingPage> {
     if (levelId == null || readingTexts.isEmpty) return 0;
 
     final levelTexts = readingTexts.where(
-      (text) => text["level_id"] == levelId,
+          (text) => text["level_id"] == levelId,
     );
 
     final total = levelTexts.length;
@@ -153,7 +168,7 @@ class _ReadingPageState extends State<ReadingPage> {
     }
 
     final levelTexts = readingTexts.where(
-      (text) => text["level_id"] == levelId,
+          (text) => text["level_id"] == levelId,
     );
     final completed = levelTexts.where((text) => text["is_passed"] == 1).length;
 
@@ -162,7 +177,7 @@ class _ReadingPageState extends State<ReadingPage> {
 
   dynamic firstPendingText(Iterable<dynamic> texts) {
     final assignedTexts = texts.where(
-      (text) => text["is_assigned"] == 1 && text["is_passed"] != 1,
+          (text) => text["is_assigned"] == 1 && text["is_passed"] != 1,
     );
 
     if (assignedTexts.isNotEmpty) return assignedTexts.first;
@@ -174,6 +189,7 @@ class _ReadingPageState extends State<ReadingPage> {
 
   @override
   void dispose() {
+    _pulseController.dispose(); // Animasyonu temizle
     recorder.dispose();
     super.dispose();
   }
@@ -201,7 +217,7 @@ class _ReadingPageState extends State<ReadingPage> {
         if (readingTexts.isNotEmpty) {
           if (widget.selectedLevelId != null) {
             final matchedTexts = readingTexts.where(
-              (text) => text["level_id"] == widget.selectedLevelId,
+                  (text) => text["level_id"] == widget.selectedLevelId,
             );
 
             if (matchedTexts.isNotEmpty) {
@@ -267,27 +283,33 @@ class _ReadingPageState extends State<ReadingPage> {
       isRecording = true;
       resetAnalysisResult();
     });
+
+    // Kayıt başladığında butonu nefes alıp verir gibi oynat
+    _pulseController.repeat(reverse: true);
   }
 
   Future<void> stopRecording() async {
     final path = await recorder.stop();
 
+    // Animasyonu durdur ve varsayılan boyuta dön
+    _pulseController.stop();
+    _pulseController.reset();
+
     if (path == null) {
       showMessage("Ses kaydı alınamadı.");
+      setState(() {
+        isRecording = false;
+      });
       return;
     }
-
-    final file = File(path);
-    final fileSize = await file.length();
 
     setState(() {
       recordedFilePath = path;
       isRecording = false;
     });
 
-    showMessage(
-      "Ses kaydı tamamlandı. Dosya boyutu: ${(fileSize / 1024).toStringAsFixed(1)} KB",
-    );
+    // Ses kaydedilir edilmez otomatik olarak analize gönder
+    await analyzeAudio();
   }
 
   Future<void> analyzeAudio() async {
@@ -457,7 +479,7 @@ class _ReadingPageState extends State<ReadingPage> {
               }).toList(),
               onChanged: (value) {
                 final chosenText = readingTexts.firstWhere(
-                  (text) => text["id"] == value,
+                      (text) => text["id"] == value,
                 );
 
                 setState(() {
@@ -536,62 +558,76 @@ class _ReadingPageState extends State<ReadingPage> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 32),
 
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.mic),
-                  label: const Text("Başlat"),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+          // --- TEK BÜYÜK HAREKETLİ BUTON ---
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: isRecording ? _pulseAnimation.value : 1.0,
+                      child: InkWell(
+                        onTap: isAnalyzing
+                            ? null
+                            : (isRecording ? stopRecording : startRecording),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 110,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            // Analiz ediliyorsa Gri, Kayıttaysa Kırmızı, Boştaysa Yeşil
+                            color: isAnalyzing
+                                ? Colors.grey
+                                : (isRecording ? Colors.redAccent : Colors.green),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: isAnalyzing
+                                    ? Colors.grey.withOpacity(0.4)
+                                    : (isRecording ? Colors.redAccent : Colors.green)
+                                    .withOpacity(0.5),
+                                blurRadius: 15,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: isAnalyzing
+                              ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 4,
+                            ),
+                          )
+                              : Icon(
+                            isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                            color: Colors.white,
+                            size: 50,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isAnalyzing
+                      ? "Analiz ediliyor..."
+                      : (isRecording ? "Durdur" : "Kaydet"),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
-                  onPressed: isRecording ? null : startRecording,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.stop),
-                  label: const Text("Durdur"),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  onPressed: isRecording ? stopRecording : null,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.auto_graph),
-              label: Text(
-                isAnalyzing ? "Analiz ediliyor..." : "Ses Kaydını Analiz Et",
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              onPressed: isAnalyzing ? null : analyzeAudio,
+              ],
             ),
           ),
 
-          if (hasAnalysisResult) const SizedBox(height: 22),
+          if (hasAnalysisResult) const SizedBox(height: 32),
 
           if (hasAnalysisResult)
             Container(

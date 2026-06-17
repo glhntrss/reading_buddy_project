@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../widgets/progress_metric.dart';
 import '../widgets/stat_card.dart';
 
-class AnalysisResultPage extends StatelessWidget {
+class AnalysisResultPage extends StatefulWidget {
   final Map<String, dynamic> data;
   final Map<String, dynamic>? selectedText;
 
@@ -13,15 +14,47 @@ class AnalysisResultPage extends StatelessWidget {
     required this.selectedText,
   });
 
+  @override
+  State<AnalysisResultPage> createState() => _AnalysisResultPageState();
+}
+
+class _AnalysisResultPageState extends State<AnalysisResultPage> {
   static const Color primaryColor = Color(0xFF6C63FF);
   static const Color softYellow = Color(0xFFFFF8E1);
   static const Color softGreen = Color(0xFFE8F8EF);
   static const Color softLavender = Color(0xFFF3EFFF);
 
-  int get stars => data["stars"] ?? 0;
-  bool get passed => data["passed"] == 1 || data["passed"] == true;
-  double get war => percentageValue(data["war"]);
-  double get wer => percentageValue(data["wer"]);
+  final FlutterTts flutterTts = FlutterTts();
+
+  @override
+  void initState() {
+    super.initState();
+    _initTts();
+  }
+
+  Future<void> _initTts() async {
+    await flutterTts.setLanguage("tr-TR");
+    await flutterTts.setVolume(1.0);
+    await flutterTts.setPitch(1.0);
+  }
+
+  Future<void> _speak(String text, double rate) async {
+    if (text.isNotEmpty) {
+      await flutterTts.setSpeechRate(rate);
+      await flutterTts.speak(text);
+    }
+  }
+
+  @override
+  void dispose() {
+    flutterTts.stop();
+    super.dispose();
+  }
+
+  int get stars => widget.data["stars"] ?? 0;
+  bool get passed => widget.data["passed"] == 1 || widget.data["passed"] == true;
+  double get war => percentageValue(widget.data["war"]);
+  double get wer => percentageValue(widget.data["wer"]);
 
   double percentageValue(dynamic value) {
     final parsed = value is num
@@ -31,25 +64,25 @@ class AnalysisResultPage extends StatelessWidget {
   }
 
   Map<String, dynamic> get mlPrediction {
-    final prediction = data["ml_prediction"];
+    final prediction = widget.data["ml_prediction"];
     if (prediction is Map<String, dynamic>) return prediction;
     return {};
   }
 
   Map<String, dynamic> get levelProgress {
-    final progress = data["level_progress"];
+    final progress = widget.data["level_progress"];
     if (progress is Map<String, dynamic>) return progress;
     return {};
   }
 
   List<dynamic> get wordAnalysis {
-    final analysis = data["word_analysis"];
+    final analysis = widget.data["word_analysis"];
     if (analysis is List) return analysis;
     return [];
   }
 
   String starsText(int count) {
-    if (count <= 0) return "Yildiz kazanilamadi";
+    if (count <= 0) return "Yıldız kazanılamadı";
     return List.generate(count, (_) => "★").join(" ");
   }
 
@@ -76,7 +109,7 @@ class AnalysisResultPage extends StatelessWidget {
   List<TextSpan> buildStudentTextSpans() {
     if (wordAnalysis.isEmpty) {
       return [
-        TextSpan(text: (data["transcript"] ?? "").toString()),
+        TextSpan(text: (widget.data["transcript"] ?? "").toString()),
       ];
     }
 
@@ -107,6 +140,35 @@ class AnalysisResultPage extends StatelessWidget {
     }
 
     return spans;
+  }
+
+  Widget _buildSpeedButton(String imageAsset, String tooltip, VoidCallback onTap) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 45,
+                child: Center(
+                  child: Image.asset(
+                    imageAsset,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Icon(Icons.volume_up, color: primaryColor),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   List<Widget> buildErrorCards() {
@@ -145,6 +207,8 @@ class AnalysisResultPage extends StatelessWidget {
       final studentWord = (map["student_word"] ?? "").toString();
       final feedback = (map["feedback"] ?? "").toString();
 
+      final textToSpeak = referenceWord.isEmpty ? studentWord : referenceWord;
+
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -156,15 +220,37 @@ class AnalysisResultPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              referenceWord.isEmpty ? studentWord : referenceWord,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    textToSpeak,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSpeedButton(
+                      "assets/images/turtle.png",
+                      "Yavaş Oku",
+                          () => _speak(textToSpeak, 0.35),
+                    ),
+                    _buildSpeedButton(
+                      "assets/images/rabbit.png",
+                      "Normal Oku",
+                          () => _speak(textToSpeak, 0.75),
+                    ),
+                  ],
+                ),
+              ],
             ),
             if (studentWord.isNotEmpty) ...[
-              const SizedBox(height: 6),
               Text("Algılanan: $studentWord"),
             ],
             const SizedBox(height: 8),
@@ -292,26 +378,28 @@ class AnalysisResultPage extends StatelessWidget {
     if (completed && passed) {
       return {
         "action": "done",
-        "level_id": selectedText?["level_id"],
+        "level_id": widget.selectedText?["level_id"],
       };
     }
 
     if (passed) {
       return {
         "action": "next_reading",
-        "level_id": selectedText?["level_id"],
+        "level_id": widget.selectedText?["level_id"],
       };
     }
 
     return {
       "action": "retry",
-      "level_id": selectedText?["level_id"],
-      "text_id": selectedText?["id"],
+      "level_id": widget.selectedText?["level_id"],
+      "text_id": widget.selectedText?["id"],
     };
   }
 
   @override
   Widget build(BuildContext context) {
+    final referenceText = widget.data["reference_text"] ?? "";
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Okuma Analizi"),
@@ -349,21 +437,24 @@ class AnalysisResultPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white,
+                // BURAYI DEĞİŞTİRİYORUZ: Arka plan ve kenarlık rengi ML kartıyla aynı yapıldı
+                color: primaryColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.black12),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.22)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // --- ÜST KISIM: Çocuğun Okuduğu Cümle ---
                   const Text(
-                    "Çocuğun Okuduğu Cümle",
+                    "Okunan Cümle",
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black54,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   RichText(
                     text: TextSpan(
                       style: const TextStyle(
@@ -373,6 +464,55 @@ class AnalysisResultPage extends StatelessWidget {
                       ),
                       children: buildStudentTextSpans(),
                     ),
+                  ),
+
+                  // Araya ince bir çizgi
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 18),
+                    child: Divider(height: 1, color: Colors.black12),
+                  ),
+
+                  // --- ALT KISIM: Doğru Cümle ve TTS Butonları Yan Yana ---
+                  const Text(
+                    "Doğru Cümle",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          referenceText,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            color: Colors.black87,
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildSpeedButton(
+                            "assets/images/turtle.png",
+                            "Yavaş Oku",
+                                () => _speak(referenceText, 0.35),
+                          ),
+                          _buildSpeedButton(
+                            "assets/images/rabbit.png",
+                            "Normal Oku",
+                                () => _speak(referenceText, 0.75),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -430,14 +570,14 @@ class AnalysisResultPage extends StatelessWidget {
                 Expanded(
                   child: StatCard(
                     title: "Doğru",
-                    value: "${data["correct_count"] ?? 0}",
+                    value: "${widget.data["correct_count"] ?? 0}",
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: StatCard(
                     title: "Yanlış",
-                    value: "${data["substitution_count"] ?? 0}",
+                    value: "${widget.data["substitution_count"] ?? 0}",
                   ),
                 ),
               ],
@@ -448,14 +588,14 @@ class AnalysisResultPage extends StatelessWidget {
                 Expanded(
                   child: StatCard(
                     title: "Eksik",
-                    value: "${data["deletion_count"] ?? 0}",
+                    value: "${widget.data["deletion_count"] ?? 0}",
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: StatCard(
                     title: "Fazla",
-                    value: "${data["insertion_count"] ?? 0}",
+                    value: "${widget.data["insertion_count"] ?? 0}",
                   ),
                 ),
               ],
