@@ -18,13 +18,20 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int selectedTabIndex = 0;
   int? selectedLevelId;
+  late Map<String, dynamic> currentStudent;
+
+  @override
+  void initState() {
+    super.initState();
+    currentStudent = Map<String, dynamic>.from(widget.student);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final studentId = widget.student["id"] ?? 1;
+    final studentId = currentStudent["id"] ?? 1;
     final List<Widget> pages = [
       HomePage(
-        student: widget.student,
+        student: currentStudent,
         onStartReading: () {
           setState(() {
             selectedTabIndex = 1;
@@ -36,7 +43,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           });
         },
       ),
-      ReadingPage(student: widget.student, selectedLevelId: selectedLevelId),
+      ReadingPage(student: currentStudent, selectedLevelId: selectedLevelId),
       LevelsPage(
         studentId: studentId,
         onLevelSelected: (levelId) {
@@ -46,7 +53,14 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           });
         },
       ),
-      ProfilePage(student: widget.student),
+      ProfilePage(
+        student: currentStudent,
+        onStudentUpdated: (updatedStudent) {
+          setState(() {
+            currentStudent = Map<String, dynamic>.from(updatedStudent);
+          });
+        },
+      ),
     ];
 
     return Scaffold(

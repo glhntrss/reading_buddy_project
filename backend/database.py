@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import hashlib
 
 DB_NAME = os.path.join(os.path.dirname(__file__), "reading_buddy.db")
+DEFAULT_AVATAR_ASSET = "assets/images/avatars/avatar_1.png"
 
 
 def get_connection():
@@ -377,6 +378,17 @@ def create_tables():
     add_column_if_not_exists(cursor, "students", "user_id", "INTEGER")
     add_column_if_not_exists(cursor, "students", "email", "TEXT")
     add_column_if_not_exists(cursor, "students", "identifier", "TEXT")
+    add_column_if_not_exists(
+        cursor,
+        "students",
+        "avatar_asset",
+        f"TEXT DEFAULT '{DEFAULT_AVATAR_ASSET}'",
+    )
+    cursor.execute("""
+        UPDATE students
+        SET avatar_asset = ?
+        WHERE avatar_asset IS NULL OR avatar_asset = ''
+    """, (DEFAULT_AVATAR_ASSET,))
 
     connection.commit()
     connection.close()
@@ -519,6 +531,159 @@ def get_students():
 
     connection.close()
     return [dict(row) for row in rows]
+
+
+def update_student_profile(student_id, full_name, email, identifier, age, grade):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    student = cursor.fetchone()
+
+    if not student:
+        connection.close()
+        raise Exception("Öğrenci bulunamadı.")
+
+    user_id = student["user_id"]
+
+    if user_id:
+        cursor.execute("""
+            SELECT id FROM users
+            WHERE (email = ? OR identifier = ?)
+              AND id != ?
+        """, (email, identifier, user_id))
+    else:
+        cursor.execute("""
+            SELECT id FROM students
+            WHERE (email = ? OR identifier = ?)
+              AND id != ?
+        """, (email, identifier, student_id))
+
+    if cursor.fetchone():
+        connection.close()
+        raise Exception("Bu mail veya ID başka bir kullanıcı tarafından kullanılıyor.")
+
+    cursor.execute("""
+        UPDATE students
+        SET name = ?,
+            email = ?,
+            identifier = ?,
+            age = ?,
+            grade = ?
+        WHERE id = ?
+    """, (
+        full_name,
+        email,
+        identifier,
+        age,
+        grade,
+        student_id,
+    ))
+
+    if user_id:
+        cursor.execute("""
+            UPDATE users
+            SET full_name = ?,
+                email = ?,
+                identifier = ?
+            WHERE id = ?
+        """, (
+            full_name,
+            email,
+            identifier,
+            user_id,
+        ))
+
+    connection.commit()
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    updated_student = cursor.fetchone()
+    connection.close()
+
+    return dict(updated_student)
+
+
+def change_student_password(student_id, current_password, new_password):
+    if len(new_password.strip()) < 4:
+        raise Exception("Yeni şifre en az 4 karakter olmalı.")
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT u.*
+        FROM users u
+        INNER JOIN students s ON s.user_id = u.id
+        WHERE s.id = ?
+    """, (student_id,))
+
+    user = cursor.fetchone()
+
+    if not user:
+        connection.close()
+        raise Exception("Bu öğrenci için kullanıcı hesabı bulunamadı.")
+
+    is_valid = verify_password(
+        current_password,
+        user["password_hash"],
+        user["password_salt"]
+    )
+
+    if not is_valid:
+        connection.close()
+        raise Exception("Mevcut şifre hatalı.")
+
+    password_hash, password_salt = hash_password(new_password)
+
+    cursor.execute("""
+        UPDATE users
+        SET password_hash = ?,
+            password_salt = ?
+        WHERE id = ?
+    """, (
+        password_hash,
+        password_salt,
+        user["id"],
+    ))
+
+    connection.commit()
+    connection.close()
+    return True
+
+
+def update_student_avatar(student_id, avatar_asset):
+    allowed_avatars = {
+        f"assets/images/avatars/avatar_{index}.png"
+        for index in range(1, 17)
+    }
+
+    if avatar_asset not in allowed_avatars:
+        raise Exception("Geçersiz avatar seçimi.")
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    student = cursor.fetchone()
+
+    if not student:
+        connection.close()
+        raise Exception("Öğrenci bulunamadı.")
+
+    cursor.execute("""
+        UPDATE students
+        SET avatar_asset = ?
+        WHERE id = ?
+    """, (
+        avatar_asset,
+        student_id,
+    ))
+
+    connection.commit()
+    cursor.execute("SELECT * FROM students WHERE id = ?", (student_id,))
+    updated_student = cursor.fetchone()
+    connection.close()
+
+    return dict(updated_student)
 
 
 def get_levels():

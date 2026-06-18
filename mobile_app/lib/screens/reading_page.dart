@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -20,7 +18,8 @@ class ReadingPage extends StatefulWidget {
   State<ReadingPage> createState() => _ReadingPageState();
 }
 
-class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStateMixin {
+class _ReadingPageState extends State<ReadingPage>
+    with SingleTickerProviderStateMixin {
   final AudioRecorder recorder = AudioRecorder();
 
   bool isLoading = true;
@@ -88,7 +87,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
     if (levelId == null || readingTexts.isEmpty) return;
 
     final matchedTexts = readingTexts.where(
-          (text) => text["level_id"] == levelId,
+      (text) => text["level_id"] == levelId,
     );
 
     if (matchedTexts.isNotEmpty) {
@@ -150,7 +149,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
     if (levelId == null || readingTexts.isEmpty) return 0;
 
     final levelTexts = readingTexts.where(
-          (text) => text["level_id"] == levelId,
+      (text) => text["level_id"] == levelId,
     );
 
     final total = levelTexts.length;
@@ -168,7 +167,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
     }
 
     final levelTexts = readingTexts.where(
-          (text) => text["level_id"] == levelId,
+      (text) => text["level_id"] == levelId,
     );
     final completed = levelTexts.where((text) => text["is_passed"] == 1).length;
 
@@ -177,7 +176,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
 
   dynamic firstPendingText(Iterable<dynamic> texts) {
     final assignedTexts = texts.where(
-          (text) => text["is_assigned"] == 1 && text["is_passed"] != 1,
+      (text) => text["is_assigned"] == 1 && text["is_passed"] != 1,
     );
 
     if (assignedTexts.isNotEmpty) return assignedTexts.first;
@@ -217,7 +216,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
         if (readingTexts.isNotEmpty) {
           if (widget.selectedLevelId != null) {
             final matchedTexts = readingTexts.where(
-                  (text) => text["level_id"] == widget.selectedLevelId,
+              (text) => text["level_id"] == widget.selectedLevelId,
             );
 
             if (matchedTexts.isNotEmpty) {
@@ -479,7 +478,7 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
               }).toList(),
               onChanged: (value) {
                 final chosenText = readingTexts.firstWhere(
-                      (text) => text["id"] == value,
+                  (text) => text["id"] == value,
                 );
 
                 setState(() {
@@ -582,14 +581,18 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
                             // Analiz ediliyorsa Gri, Kayıttaysa Kırmızı, Boştaysa Yeşil
                             color: isAnalyzing
                                 ? Colors.grey
-                                : (isRecording ? Colors.redAccent : Colors.green),
+                                : (isRecording
+                                      ? Colors.redAccent
+                                      : Colors.green),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                 color: isAnalyzing
-                                    ? Colors.grey.withOpacity(0.4)
-                                    : (isRecording ? Colors.redAccent : Colors.green)
-                                    .withOpacity(0.5),
+                                    ? Colors.grey.withValues(alpha: 0.4)
+                                    : (isRecording
+                                              ? Colors.redAccent
+                                              : Colors.green)
+                                          .withValues(alpha: 0.5),
                                 blurRadius: 15,
                                 spreadRadius: 3,
                               ),
@@ -597,16 +600,18 @@ class _ReadingPageState extends State<ReadingPage> with SingleTickerProviderStat
                           ),
                           child: isAnalyzing
                               ? const Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 4,
-                            ),
-                          )
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 4,
+                                  ),
+                                )
                               : Icon(
-                            isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                            color: Colors.white,
-                            size: 50,
-                          ),
+                                  isRecording
+                                      ? Icons.stop_rounded
+                                      : Icons.mic_rounded,
+                                  color: Colors.white,
+                                  size: 50,
+                                ),
                         ),
                       ),
                     );

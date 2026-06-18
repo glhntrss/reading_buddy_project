@@ -18,6 +18,80 @@ class ApiService {
     throw Exception("Öğrenciler alınamadı: ${response.body}");
   }
 
+  static Future<Map<String, dynamic>> updateStudentProfile({
+    required int studentId,
+    required String fullName,
+    required String email,
+    required String identifier,
+    required int age,
+    required String grade,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse("$baseUrl/students/$studentId/profile"),
+          body: {
+            "full_name": fullName,
+            "email": email,
+            "identifier": identifier,
+            "age": age.toString(),
+            "grade": grade,
+          },
+        )
+        .timeout(const Duration(seconds: 8));
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data["error"] == null) {
+      return data["student"] ?? {};
+    }
+
+    throw Exception(data["error"] ?? "Profil güncellenemedi.");
+  }
+
+  static Future<Map<String, dynamic>> updateStudentAvatar({
+    required int studentId,
+    required String avatarAsset,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse("$baseUrl/students/$studentId/avatar"),
+          body: {"avatar_asset": avatarAsset},
+        )
+        .timeout(const Duration(seconds: 8));
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data["error"] == null) {
+      return data["student"] ?? {};
+    }
+
+    throw Exception(data["error"] ?? "Avatar güncellenemedi.");
+  }
+
+  static Future<void> changeStudentPassword({
+    required int studentId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse("$baseUrl/students/$studentId/password"),
+          body: {
+            "current_password": currentPassword,
+            "new_password": newPassword,
+          },
+        )
+        .timeout(const Duration(seconds: 8));
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data["error"] == null) {
+      return;
+    }
+
+    throw Exception(data["error"] ?? "Şifre güncellenemedi.");
+  }
+
   static Future<Map<String, dynamic>> loginUser({
     required String role,
     required String loginIdentifier,

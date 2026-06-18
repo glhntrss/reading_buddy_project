@@ -11,6 +11,9 @@ from database import (
     get_all_sessions,
     get_reading_texts,
     get_students,
+    update_student_profile,
+    change_student_password,
+    update_student_avatar,
     get_levels,
     get_student_progress,
     get_texts_by_unlocked_levels,
@@ -997,6 +1000,78 @@ def students():
     return {
         "students": get_students()
     }
+
+
+@app.post("/students/{student_id}/profile")
+def update_student_profile_endpoint(
+    student_id: int,
+    full_name: str = Form(...),
+    email: str = Form(...),
+    identifier: str = Form(...),
+    age: int = Form(...),
+    grade: str = Form(...)
+):
+    try:
+        student = update_student_profile(
+            student_id=student_id,
+            full_name=full_name,
+            email=email,
+            identifier=identifier,
+            age=age,
+            grade=grade,
+        )
+
+        return {
+            "message": "Profil başarıyla güncellendi.",
+            "student": student
+        }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+
+@app.post("/students/{student_id}/avatar")
+def update_student_avatar_endpoint(
+    student_id: int,
+    avatar_asset: str = Form(...)
+):
+    try:
+        student = update_student_avatar(
+            student_id=student_id,
+            avatar_asset=avatar_asset,
+        )
+
+        return {
+            "message": "Avatar başarıyla güncellendi.",
+            "student": student
+        }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+
+@app.post("/students/{student_id}/password")
+def change_student_password_endpoint(
+    student_id: int,
+    current_password: str = Form(...),
+    new_password: str = Form(...)
+):
+    try:
+        change_student_password(
+            student_id=student_id,
+            current_password=current_password,
+            new_password=new_password,
+        )
+
+        return {
+            "message": "Şifre başarıyla güncellendi."
+        }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
 
 
 @app.get("/levels")
