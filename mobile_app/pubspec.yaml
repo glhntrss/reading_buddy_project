@@ -1,5 +1,5 @@
-name: mobile_app
-description: "A new Flutter project."
+name: ai_reading_buddy
+description: "Reading Buddy App"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -37,10 +37,18 @@ dependencies:
   path_provider: ^2.1.2
   cupertino_icons: ^1.0.8
   flutter_tts: ^4.2.5
+  flutter_launcher_icons: ^0.14.4
   
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

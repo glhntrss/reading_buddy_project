@@ -28,7 +28,7 @@ class LevelProgressCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "In Progress",
+                  "İlerleme",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 19,
