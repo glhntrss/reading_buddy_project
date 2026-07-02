@@ -225,7 +225,11 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       },
     );
 
-    noteController.dispose();
+    // Alt pencerenin kapanma animasyonunun bitmesini bekliyoruz.
+    // Aksi halde TextField hala controller'ı dinlediği için '_dependents.isEmpty' hatası fırlatılır.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      noteController.dispose();
+    });
   }
 
   String formatDate(DateTime date) {

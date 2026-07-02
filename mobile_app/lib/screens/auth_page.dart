@@ -256,6 +256,46 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
+  void _showConfigDialog() {
+    final TextEditingController urlController =
+        TextEditingController(text: ApiService.baseUrl);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("API Bağlantı Ayarı"),
+          content: TextField(
+            controller: urlController,
+            decoration: const InputDecoration(
+              hintText: "Örn: http://192.168.1.10:8000",
+              labelText: "Backend URL",
+            ),
+            keyboardType: TextInputType.url,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("İptal"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final url = urlController.text.trim();
+                if (url.isNotEmpty) {
+                  ApiService.baseUrl = url;
+                } else {
+                  ApiService.baseUrl = "http://localhost:8000";
+                }
+                Navigator.pop(context);
+                showMessage("API URL güncellendi:\n${ApiService.baseUrl}");
+              },
+              child: const Text("Kaydet"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget roleSwitch() {
     return Container(
       padding: const EdgeInsets.all(5),
@@ -569,6 +609,14 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFCF7FF),
+      floatingActionButton: FloatingActionButton(
+        mini: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black54,
+        elevation: 2,
+        onPressed: _showConfigDialog,
+        child: const Icon(Icons.settings_ethernet),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),

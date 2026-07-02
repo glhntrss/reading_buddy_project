@@ -91,7 +91,7 @@ class _AnalysisResultPageState extends State<AnalysisResultPage> {
       case "correct":
         return Colors.green.shade700;
       case "missing":
-        return Colors.grey.shade600;
+        return Colors.grey.shade500;
       case "extra":
       case "wrong":
         return primaryColor;
@@ -239,12 +239,12 @@ class _AnalysisResultPageState extends State<AnalysisResultPage> {
                     _buildSpeedButton(
                       "assets/images/turtle.png",
                       "Yavaş Oku",
-                          () => _speak(textToSpeak, 0.35),
+                          () => _speak(textToSpeak, 0.25),
                     ),
                     _buildSpeedButton(
                       "assets/images/rabbit.png",
                       "Normal Oku",
-                          () => _speak(textToSpeak, 0.75),
+                          () => _speak(textToSpeak, 0.60),
                     ),
                   ],
                 ),
@@ -503,12 +503,12 @@ class _AnalysisResultPageState extends State<AnalysisResultPage> {
                           _buildSpeedButton(
                             "assets/images/turtle.png",
                             "Yavaş Oku",
-                                () => _speak(referenceText, 0.35),
+                                () => _speak(referenceText, 0.25),
                           ),
                           _buildSpeedButton(
                             "assets/images/rabbit.png",
                             "Normal Oku",
-                                () => _speak(referenceText, 0.75),
+                                () => _speak(referenceText, 0.60),
                           ),
                         ],
                       ),
